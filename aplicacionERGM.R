@@ -1,8 +1,9 @@
-setwd("~/Documentos_2026/M_ECIJG/Desarrollo")
-install.packages("igraph")
-install.packages("ergm.count")
-install.packages("ergm.rank")
-install.packages("latentnet")
+#install.packages("tidyverse")
+#install.packages("igraph")
+#install.packages("ergm.count")
+#install.packages("ergm.rank")
+#install.packages("ergm.ego")
+#install.packages("latentnet")
 
 library(tidyverse)
 library(network)
@@ -13,7 +14,7 @@ library(ergm.count)
 library(ergm.rank)
 library(latentnet)
 
-baseERGM <- read.csv("base_comercio_ERGM.csv")
+baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
 
 
 baseERGM24 <- baseERGM[baseERGM$year==2024, ]
