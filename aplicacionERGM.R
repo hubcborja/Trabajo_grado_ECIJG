@@ -56,21 +56,31 @@ peso_comercio
 plot(network_comtrade, main = "peso_comercio_total", label = network.vertex.names(network_comtrade))
 plot(network_comtrade, edge.cex = peso_comercio, main = "peso_comercio_total")
 
-#Establecimiento del ERGM (endogenidad y valores exógenos)
-ergm_aristas_triangulos <- network_comtrade ~ sum + mutual(form="min") +
-  edgecov(network_comtrade, "CDT_vigente")+ 
-  edgecov(network_comtrade, "contig")+
-  edgecov(network_comtrade, "norm_ln_dist")+
-  edgecov(network_comtrade, "comlang_off")+
-  edgecov(network_comtrade, "comrelig")+
-  edgecov(network_comtrade, "fta_wto")+
-  nodemain("norm_ln_pib_per_capita_dolares_constantes_o")+
-  nodemain("norm_ln_pib_per_capita_dolares_constantes_d")+
-  nodemain("norm_entry_cost_o")+
-  nodemain("norm_entry_cost_d")
 
-summary(ergm_aristas_triangulos, response = "peso_comercio_total")
-ergm.fit.01 <- ergm(formula = ergm_aristas_triangulos, response='peso_comercio_total', reference = ~Poisson)
-summary(ergm.fit.01)
+ergm_paper <- network_comtrade ~ sum + 
+  edgecov(network_comtrade, "CDT_vigente") +
+  edgecov(network_comtrade, "norm_ln_dist") +
+  absdiff("norm_ln_pib_per_capita_dolares_constantes_o") +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min")
+
+ergm.fit.paper <- ergm(formula = ergm_paper, response='peso_comercio_total', reference = ~Poisson)
+summary(ergm.fit.paper)
+
+#Establecimiento del ERGM (endogenidad y valores exógenos)
+ergm_base <- network_comtrade ~ sum +
+  edgecov(network_comtrade, "CDT_vigente") + 
+  edgecov(network_comtrade, "fta_wto") +    
+  edgecov(network_comtrade, "contig") +
+  edgecov(network_comtrade, "norm_ln_dist") +
+  edgecov(network_comtrade, "comlang_off") +
+  edgecov(network_comtrade, "comrelig") +
+  nodeocov("norm_ln_pib_per_capita_dolares_constantes_o") + 
+  nodeicov("norm_ln_pib_per_capita_dolares_constantes_d") +
+  nodeocov("norm_entry_cost_o") +
+  nodeicov("norm_entry_cost_d")
+
+ergm.fit.base <- ergm(formula = ergm_base, response='peso_comercio_total', reference = ~Poisson)
+summary(ergm.fit.base)
 
 
