@@ -57,30 +57,68 @@ plot(network_comtrade, main = "peso_comercio_total", label = network.vertex.name
 plot(network_comtrade, edge.cex = peso_comercio, main = "peso_comercio_total")
 
 
+# 1. Extraer los pesos reales
+pesos_reales <- network_comtrade %e% "peso_comercio_total"
+
+# 2. Transformar a escala logarítmica y redondear a número entero
+# Se suma 1 para evitar problemas si hubiera algún peso de 0
+pesos_log <- round(log(pesos_reales + 1))
+
+# 3. Asignar la nueva variable procesada a tu red
+network_comtrade %e% "peso_logaritmo" <- pesos_log
+
 ergm_paper <- network_comtrade ~ sum + 
   edgecov(network_comtrade, "CDT_vigente") +
   edgecov(network_comtrade, "norm_ln_dist") +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min")
+
+library(parallel)
+nucleos <- detectCores() - 1
+
+# Corremos el modelo con la nueva respuesta
+ergm.fit.estructural <- ergm(formula = ergm_paper, 
+                             response = 'peso_logaritmo', # <-- Cambio clave
+                             reference = ~Poisson,
+                             control = control.ergm(parallel = nucleos, 
+                                                    parallel.type = "PSOCK"))
+summary(ergm.fit.estructural)
+
+ergm_paper_2 <- network_comtrade ~ sum + 
+  edgecov(network_comtrade, "CDT_vigente") +
+  edgecov(network_comtrade, "norm_ln_dist") +
+  edgecov(network_comtrade, "fta_wto") +
   absdiff("norm_ln_pib_per_capita_dolares_constantes_o") +
   mutual(form="min") + 
   transitiveweights("min", "max", "min")
 
-ergm.fit.paper <- ergm(formula = ergm_paper, response='peso_comercio_total', reference = ~Poisson)
-summary(ergm.fit.paper)
+ergm.fit.paper_2 <- ergm(formula = ergm_paper_2, response='peso_logaritmo', reference = ~Poisson,
+                       control = control.ergm(parallel = nucleos, 
+                                              parallel.type = "PSOCK"))
+summary(ergm.fit.paper_2)
+
+ergm_base <- network_comtrade ~ sum + 
+  edgecov(network_comtrade, "CDT_vigente") +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min")
+
+ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
+                         control = control.ergm(parallel = nucleos, 
+                                                parallel.type = "PSOCK"))
+summary(ergm.fit_base)
 
 #Establecimiento del ERGM (endogenidad y valores exógenos)
 ergm_base <- network_comtrade ~ sum +
   edgecov(network_comtrade, "CDT_vigente") + 
   edgecov(network_comtrade, "fta_wto") +    
-  edgecov(network_comtrade, "contig") +
   edgecov(network_comtrade, "norm_ln_dist") +
-  edgecov(network_comtrade, "comlang_off") +
-  edgecov(network_comtrade, "comrelig") +
   nodeocov("norm_ln_pib_per_capita_dolares_constantes_o") + 
   nodeicov("norm_ln_pib_per_capita_dolares_constantes_d") +
+  edgecov(network_comtrade, "comlang_off") +
   nodeocov("norm_entry_cost_o") +
   nodeicov("norm_entry_cost_d")
 
-ergm.fit.base <- ergm(formula = ergm_base, response='peso_comercio_total', reference = ~Poisson)
+ergm.fit.base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson)
 summary(ergm.fit.base)
 
 
