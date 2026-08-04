@@ -590,3 +590,256 @@ BIC, etc.) is only valid between models with the same reference
 distribution and constraints.
 
 AIC: -236474  BIC: -236429  (Smaller is better. MC Std. Err. = 51.61)
+
+
+> ergm_base <- network_comtrade ~ sum + 
++   edgecov(network_comtrade, "CDT_vigente") +
++   mutual(form="min") + 
++   transitiveweights("min", "max", "min")
+> 
+> ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
++                          control = control.ergm(parallel = nucleos, 
++                                                 parallel.type = "PSOCK"))
+Best valid proposal ‘DiscTNT’ cannot take into account hint(s) ‘triadic’.
+Starting contrastive divergence estimation via CD-MCMLE:
+Iteration 1 of at most 60:
+Convergence test P-value:2.4e-148
+1 The log-likelihood improved by 0.8694.
+Iteration 2 of at most 60:
+Convergence test P-value:4.5e-135
+1 The log-likelihood improved by 0.8695.
+Iteration 3 of at most 60:
+Convergence test P-value:3.1e-123
+1 The log-likelihood improved by 0.7359.
+Iteration 4 of at most 60:
+Convergence test P-value:2.5e-115
+1 The log-likelihood improved by 0.8032.
+Iteration 5 of at most 60:
+Convergence test P-value:5.9e-104
+1 The log-likelihood improved by 0.7915.
+Iteration 6 of at most 60:
+Convergence test P-value:2.1e-115
+1 The log-likelihood improved by 0.8182.
+Iteration 7 of at most 60:
+Convergence test P-value:1.5e-105
+1 The log-likelihood improved by 0.9534.
+Iteration 8 of at most 60:
+Convergence test P-value:1.4e-98
+1 The log-likelihood improved by 0.969.
+Iteration 9 of at most 60:
+Convergence test P-value:4.4e-69
+1 The log-likelihood improved by 0.6645.
+Iteration 10 of at most 60:
+Convergence test P-value:2.6e-15
+1 The log-likelihood improved by 0.07319.
+Iteration 11 of at most 60:
+Convergence test P-value:3e-07
+1 The log-likelihood improved by 0.03592.
+Iteration 12 of at most 60:
+Convergence test P-value:1.2e-04
+1 The log-likelihood improved by 0.02249.
+Iteration 13 of at most 60:
+Convergence test P-value:1.8e-03
+1 The log-likelihood improved by 0.01752.
+Iteration 14 of at most 60:
+Convergence test P-value:1e-03
+1 The log-likelihood improved by 0.0188.
+Iteration 15 of at most 60:
+Convergence test P-value:2.3e-03
+1 The log-likelihood improved by 0.01642.
+Iteration 16 of at most 60:
+Convergence test P-value:2.6e-02
+1 The log-likelihood improved by 0.01107.
+Iteration 17 of at most 60:
+Convergence test P-value:9.3e-02
+1 The log-likelihood improved by 0.007752.
+Iteration 18 of at most 60:
+Convergence test P-value:2.7e-01
+1 The log-likelihood improved by 0.005044.
+Iteration 19 of at most 60:
+Convergence test P-value:4.6e-02
+1 The log-likelihood improved by 0.01006.
+Iteration 20 of at most 60:
+Convergence test P-value:9.3e-01
+Convergence detected. Stopping.
+1 The log-likelihood improved by 0.0008439.
+Finished CD.
+Starting Monte Carlo maximum likelihood estimation (MCMLE):
+Iteration 1 of at most 60:
+1 Optimizing with step length 0.0184.
+The log-likelihood improved by 2.9627.
+Estimating equations are not within tolerance region.
+Iteration 2 of at most 60:
+1 Optimizing with step length 0.0169.
+The log-likelihood improved by 2.5500.
+Estimating equations are not within tolerance region.
+Iteration 3 of at most 60:
+1 Optimizing with step length 0.0171.
+The log-likelihood improved by 2.2212.
+Estimating equations are not within tolerance region.
+Iteration 4 of at most 60:
+1 Optimizing with step length 0.0262.
+The log-likelihood improved by 4.0332.
+Estimating equations are not within tolerance region.
+Iteration 5 of at most 60:
+1 Optimizing with step length 0.0243.
+The log-likelihood improved by 2.8564.
+Estimating equations are not within tolerance region.
+Iteration 6 of at most 60:
+1 Optimizing with step length 0.0242.
+The log-likelihood improved by 2.6905.
+Estimating equations are not within tolerance region.
+Iteration 7 of at most 60:
+1 Optimizing with step length 0.0288.
+The log-likelihood improved by 3.5935.
+Estimating equations are not within tolerance region.
+Iteration 8 of at most 60:
+1 Optimizing with step length 0.0295.
+The log-likelihood improved by 3.5455.
+Estimating equations are not within tolerance region.
+Iteration 9 of at most 60:
+1 Optimizing with step length 0.0325.
+The log-likelihood improved by 3.9905.
+Estimating equations are not within tolerance region.
+Iteration 10 of at most 60:
+1 Optimizing with step length 0.0329.
+The log-likelihood improved by 2.8256.
+Estimating equations are not within tolerance region.
+Iteration 11 of at most 60:
+1 Optimizing with step length 0.0347.
+The log-likelihood improved by 2.7246.
+Estimating equations are not within tolerance region.
+Iteration 12 of at most 60:
+1 Optimizing with step length 0.0448.
+The log-likelihood improved by 4.1163.
+Estimating equations are not within tolerance region.
+Iteration 13 of at most 60:
+1 Optimizing with step length 0.0427.
+The log-likelihood improved by 2.6748.
+Estimating equations are not within tolerance region.
+Iteration 14 of at most 60:
+1 Optimizing with step length 0.0473.
+The log-likelihood improved by 3.0228.
+Estimating equations are not within tolerance region.
+Iteration 15 of at most 60:
+1 Optimizing with step length 0.0452.
+The log-likelihood improved by 2.3399.
+Estimating equations are not within tolerance region.
+Iteration 16 of at most 60:
+1 Optimizing with step length 0.0547.
+The log-likelihood improved by 2.8564.
+Estimating equations are not within tolerance region.
+Iteration 17 of at most 60:
+1 Optimizing with step length 0.0625.
+The log-likelihood improved by 3.8687.
+Estimating equations are not within tolerance region.
+Iteration 18 of at most 60:
+1 Optimizing with step length 0.0563.
+The log-likelihood improved by 2.6925.
+Estimating equations are not within tolerance region.
+Iteration 19 of at most 60:
+1 Optimizing with step length 0.0585.
+The log-likelihood improved by 2.5815.
+Estimating equations are not within tolerance region.
+Iteration 20 of at most 60:
+1 Optimizing with step length 0.0614.
+The log-likelihood improved by 2.5319.
+Estimating equations are not within tolerance region.
+Iteration 21 of at most 60:
+1 Optimizing with step length 0.0768.
+The log-likelihood improved by 2.5996.
+Estimating equations are not within tolerance region.
+Iteration 22 of at most 60:
+1 Optimizing with step length 0.0829.
+The log-likelihood improved by 2.7344.
+Estimating equations are not within tolerance region.
+Iteration 23 of at most 60:
+1 Optimizing with step length 0.1237.
+The log-likelihood improved by 3.9526.
+Estimating equations are not within tolerance region.
+Iteration 24 of at most 60:
+1 Optimizing with step length 0.1142.
+The log-likelihood improved by 2.5496.
+Estimating equations are not within tolerance region.
+Iteration 25 of at most 60:
+1 Optimizing with step length 0.1185.
+The log-likelihood improved by 2.2819.
+Estimating equations are not within tolerance region.
+Iteration 26 of at most 60:
+1 Optimizing with step length 0.1426.
+The log-likelihood improved by 2.3497.
+Estimating equations are not within tolerance region.
+Iteration 27 of at most 60:
+1 Optimizing with step length 0.1864.
+The log-likelihood improved by 2.9472.
+Estimating equations are not within tolerance region.
+Iteration 28 of at most 60:
+1 Optimizing with step length 0.2433.
+The log-likelihood improved by 2.8003.
+Estimating equations are not within tolerance region.
+Iteration 29 of at most 60:
+1 Optimizing with step length 0.3836.
+The log-likelihood improved by 3.6427.
+Estimating equations are not within tolerance region.
+Iteration 30 of at most 60:
+1 Optimizing with step length 0.3862.
+The log-likelihood improved by 1.7206.
+Estimating equations are not within tolerance region.
+Iteration 31 of at most 60:
+1 Optimizing with step length 0.8778.
+The log-likelihood improved by 2.9838.
+Estimating equations are not within tolerance region.
+Iteration 32 of at most 60:
+1 Optimizing with step length 1.0000.
+The log-likelihood improved by 0.0617.
+Convergence test p-value: 0.7479. Not converged with 99% confidence; increasing sample size.
+Iteration 33 of at most 60:
+1 Optimizing with step length 1.0000.
+The log-likelihood improved by 0.0221.
+Convergence test p-value: 0.1777. Not converged with 99% confidence; increasing sample size.
+Iteration 34 of at most 60:
+1 Optimizing with step length 1.0000.
+The log-likelihood improved by 0.0084.
+Convergence test p-value: 0.0517. Not converged with 99% confidence; increasing sample size.
+Iteration 35 of at most 60:
+1 Optimizing with step length 1.0000.
+The log-likelihood improved by 0.0158.
+Convergence test p-value: 0.0651. Not converged with 99% confidence; increasing sample size.
+Iteration 36 of at most 60:
+1 Optimizing with step length 1.0000.
+The log-likelihood improved by 0.0158.
+Convergence test p-value: 0.0002. Converged with 99% confidence.
+Finished MCMLE.
+Evaluating log-likelihood at the estimate. Setting up bridge sampling...
+Best valid proposal ‘DiscTNT’ cannot take into account hint(s) ‘triadic’.
+Using 16 bridges: 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 .
+Note: Null model likelihood calculation is not implemented for valued ERGMs at this
+time.  This means that all likelihood-based inference (LRT, Analysis of Deviance, AIC,
+BIC, etc.) is only valid between models with the same reference distribution and
+constraints.
+
+This model was fit using MCMC.  To examine model diagnostics and check for degeneracy,
+use the mcmc.diagnostics() function.
+> summary(ergm.fit_base)
+Call:
+ergm(formula = ergm_base, response = "peso_logaritmo", reference = ~Poisson, 
+    control = control.ergm(parallel = nucleos, parallel.type = "PSOCK"))
+
+Monte Carlo Maximum Likelihood Results:
+
+                              Estimate Std. Error MCMC % z value Pr(>|z|)    
+sum                           1.471369   0.077433      0  19.002   <1e-04 ***
+edgecov.sum.CDT_vigente       0.374183   0.009815      0  38.125   <1e-04 ***
+mutual.min                    0.005572   0.013530      0   0.412     0.68    
+transitiveweights.min.max.min 1.156295   0.077180      0  14.982   <1e-04 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+     Null Deviance:       0  on 4290  degrees of freedom
+ Residual Deviance: -229185  on 4286  degrees of freedom
+ 
+Note that the null model likelihood and deviance are defined to be 0. This means that
+all likelihood-based inference (LRT, Analysis of Deviance, AIC, BIC, etc.) is only
+valid between models with the same reference distribution and constraints.
+
+AIC: -229177  BIC: -229151  (Smaller is better. MC Std. Err. = 52.69)

@@ -57,14 +57,12 @@ plot(network_comtrade, main = "peso_comercio_total", label = network.vertex.name
 plot(network_comtrade, edge.cex = peso_comercio, main = "peso_comercio_total")
 
 
-# 1. Extraer los pesos reales
 pesos_reales <- network_comtrade %e% "peso_comercio_total"
 
-# 2. Transformar a escala logarítmica y redondear a número entero
-# Se suma 1 para evitar problemas si hubiera algún peso de 0
+# Transformar a escala logarítmica y redondear a número entero
 pesos_log <- round(log(pesos_reales + 1))
 
-# 3. Asignar la nueva variable procesada a tu red
+# Asignar la nueva variable procesada a la red
 network_comtrade %e% "peso_logaritmo" <- pesos_log
 
 ergm_paper <- network_comtrade ~ sum + 
@@ -76,9 +74,9 @@ ergm_paper <- network_comtrade ~ sum +
 library(parallel)
 nucleos <- detectCores() - 1
 
-# Corremos el modelo con la nueva respuesta
+# Modelo con la nueva respuesta
 ergm.fit.estructural <- ergm(formula = ergm_paper, 
-                             response = 'peso_logaritmo', # <-- Cambio clave
+                             response = 'peso_logaritmo',
                              reference = ~Poisson,
                              control = control.ergm(parallel = nucleos, 
                                                     parallel.type = "PSOCK"))
@@ -97,6 +95,7 @@ ergm.fit.paper_2 <- ergm(formula = ergm_paper_2, response='peso_logaritmo', refe
                                               parallel.type = "PSOCK"))
 summary(ergm.fit.paper_2)
 
+#ERGM base
 ergm_base <- network_comtrade ~ sum + 
   edgecov(network_comtrade, "CDT_vigente") +
   mutual(form="min") + 
@@ -107,7 +106,7 @@ ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference 
                                                 parallel.type = "PSOCK"))
 summary(ergm.fit_base)
 
-#Establecimiento del ERGM (endogenidad y valores exógenos)
+#Establecimiento del ERGM con todas las variables 
 ergm_base <- network_comtrade ~ sum +
   edgecov(network_comtrade, "CDT_vigente") + 
   edgecov(network_comtrade, "fta_wto") +    
