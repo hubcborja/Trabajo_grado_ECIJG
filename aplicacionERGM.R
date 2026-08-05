@@ -14,6 +14,9 @@ library(igraph)
 library(ergm.count)
 library(ergm.rank)
 library(latentnet)
+library(parallel)
+
+nucleos <- detectCores() - 1
 
 # Importación de la base
 baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
@@ -65,14 +68,28 @@ pesos_log <- round(log(pesos_reales + 1))
 # Asignar la nueva variable procesada a la red
 network_comtrade %e% "peso_logaritmo" <- pesos_log
 
+#ERGM base con solo los convenios y las estadísticas endógenas
+ergm_base <- network_comtrade ~ sum + 
+  edgecov(network_comtrade, "CDT_vigente") +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min")
+
+ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
+                      control = control.ergm(parallel = nucleos, 
+                                             parallel.type = "PSOCK"))
+summary(ergm.fit_base)
+
+gof1 <- gof(ergm.fit_base)
+par(mfrow=c(2,2))
+plot(gof1)
+gof1
+
+# segundo ERGM base con convenios, distancia entre paises y las estadísticas endógenas
 ergm_paper <- network_comtrade ~ sum + 
   edgecov(network_comtrade, "CDT_vigente") +
   edgecov(network_comtrade, "norm_ln_dist") +
   mutual(form="min") + 
   transitiveweights("min", "max", "min")
-
-library(parallel)
-nucleos <- detectCores() - 1
 
 # Modelo con la nueva respuesta
 ergm.fit.estructural <- ergm(formula = ergm_paper, 
@@ -81,6 +98,14 @@ ergm.fit.estructural <- ergm(formula = ergm_paper,
                              control = control.ergm(parallel = nucleos, 
                                                     parallel.type = "PSOCK"))
 summary(ergm.fit.estructural)
+
+gof2 <- gof(ergm.fit.estructural)
+par(mfrow=c(2,2))
+plot(gof2)
+gof2
+
+# Tercer ERGM base con convenios, distancia entre paises, diferencia entre pib, pertenencia OMC
+# y las estadísticas endógenas
 
 ergm_paper_2 <- network_comtrade ~ sum + 
   edgecov(network_comtrade, "CDT_vigente") +
@@ -95,18 +120,14 @@ ergm.fit.paper_2 <- ergm(formula = ergm_paper_2, response='peso_logaritmo', refe
                                               parallel.type = "PSOCK"))
 summary(ergm.fit.paper_2)
 
-#ERGM base
-ergm_base <- network_comtrade ~ sum + 
-  edgecov(network_comtrade, "CDT_vigente") +
-  mutual(form="min") + 
-  transitiveweights("min", "max", "min")
 
-ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
-                         control = control.ergm(parallel = nucleos, 
-                                                parallel.type = "PSOCK"))
-summary(ergm.fit_base)
+gof3 <- gof(ergm.fit.estructural)
+par(mfrow=c(2,2))
+plot(gof3)
+gof3
 
-#Establecimiento del ERGM con todas las variables 
+
+# Cuarto ERGM con todas las variables exógenas y las endógenas
 ergm_base <- network_comtrade ~ sum +
   edgecov(network_comtrade, "CDT_vigente") + 
   edgecov(network_comtrade, "fta_wto") +    
@@ -120,4 +141,9 @@ ergm_base <- network_comtrade ~ sum +
 ergm.fit.base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson)
 summary(ergm.fit.base)
 
+
+gof4 <- gof(ergm.fit.estructural)
+par(mfrow=c(2,2))
+plot(gof4)
+gof4
 
