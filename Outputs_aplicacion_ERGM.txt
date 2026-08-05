@@ -1,18 +1,17 @@
 
-# 1. Extraer los pesos reales
 pesos_reales <- network_comtrade %e% "peso_comercio_total"
 
-# 2. Transformar a escala logarítmica y redondear a número entero
-# Se suma 1 para evitar problemas si hubiera algún peso de 0
+# Transformar a escala logarítmica y redondear a número entero
 pesos_log <- round(log(pesos_reales + 1))
 
-# 3. Asignar la nueva variable procesada a tu red
+# Asignar la nueva variable procesada a la red
 network_comtrade %e% "peso_logaritmo" <- pesos_log
+
 
 
 # Corremos el modelo con la nueva respuesta
 ergm.fit.estructural <- ergm(formula = ergm_paper, 
-                             response = 'peso_logaritmo', # <-- Cambio clave
+                             response = 'peso_logaritmo',
                              reference = ~Poisson,
                              control = control.ergm(parallel = nucleos, 
                                                     parallel.type = "PSOCK"))
@@ -269,6 +268,52 @@ BIC, etc.) is only valid between models with the same reference
 distribution and constraints.
 
 AIC: -229071  BIC: -229039  (Smaller is better. MC Std. Err. = 37.34)
+
+
+Goodness-of-fit for model statistics 
+
+                                    obs       min      mean       max MC p-value
+sum                           63931.000 60122.000 63493.060 64288.000       0.26
+edgecov.sum.CDT_vigente       14348.000 13764.000 14200.820 14577.000       0.46
+edgecov.sum.norm_ln_dist      -3792.269 -4483.205 -3630.583 -3084.399       0.38
+mutual.min                    27606.000 24271.000 27393.060 27944.000       0.42
+transitiveweights.min.max.min 63816.000 59994.000 63371.020 64173.000       0.24
+
+Goodness-of-fit for cumulative distribution function 
+
+    obs  min    mean  max MC p-value
+0   794    0    0.66   55       0.00
+1   795    0    3.09  212       0.00
+2   795    0    6.48  378       0.00
+3   799    0   11.42  494       0.00
+4   801    2   20.76  576       0.00
+5   806   18   40.58  646       0.00
+6   818   50   81.06  700       0.00
+7   836  116  155.72  771       0.00
+8   860  228  278.83  830       0.00
+9   896  404  465.55  933       0.02
+10  933  661  719.03 1099       0.06
+11  983  951 1033.92 1335       0.10
+12 1037 1317 1400.49 1620       0.00
+13 1139 1711 1789.51 1951       0.00
+14 1292 1999 2178.69 2304       0.00
+15 1531 2256 2548.47 2641       0.00
+16 1754 2560 2879.25 2951       0.00
+17 2104 2858 3168.90 3241       0.00
+18 2449 3126 3414.09 3482       0.00
+19 2831 3386 3617.53 3682       0.00
+20 3228 3608 3785.63 3843       0.00
+21 3593 3813 3918.29 3963       0.00
+22 3896 3990 4028.26 4067       0.00
+23 4128 4059 4115.30 4176       0.68
+24 4234 4134 4184.65 4239       0.08
+25 4281 4196 4233.65 4282       0.02
+26 4286 4237 4268.68 4289       0.22
+27 4290 4267 4281.43 4290       0.30
+28 4290 4279 4287.39 4290       0.76
+29 4290 4288 4289.65 4290       1.00
+30 4290 4289 4289.98 4290       1.00
+
 
 ergm_paper_2 <- network_comtrade ~ sum + 
   edgecov(network_comtrade, "CDT_vigente") +
@@ -591,6 +636,50 @@ distribution and constraints.
 
 AIC: -236474  BIC: -236429  (Smaller is better. MC Std. Err. = 51.61)
 
+Goodness-of-fit for model statistics 
+
+                                    obs       min      mean       max MC p-value
+sum                           63931.000 60136.000 63555.560 64273.000       0.34
+edgecov.sum.CDT_vigente       14348.000 13725.000 14226.410 14505.000       0.58
+edgecov.sum.norm_ln_dist      -3792.269 -4168.466 -3672.627 -3117.227       0.52
+mutual.min                    27606.000 24325.000 27405.210 27776.000       0.48
+transitiveweights.min.max.min 63816.000 59981.000 63435.290 64175.000       0.32
+
+Goodness-of-fit for cumulative distribution function 
+
+    obs  min    mean  max MC p-value
+0   794    0    0.59   50       0.00
+1   795    0    2.75  192       0.00
+2   795    0    6.05  372       0.00
+3   799    0   10.87  493       0.00
+4   801    3   19.65  565       0.00
+5   806   17   39.63  638       0.00
+6   818   48   79.99  704       0.00
+7   836  111  153.71  771       0.00
+8   860  237  277.23  852       0.00
+9   896  409  464.18  956       0.04
+10  933  657  719.41 1087       0.06
+11  983  972 1036.75 1339       0.10
+12 1037 1322 1400.18 1610       0.00
+13 1139 1697 1787.00 1914       0.00
+14 1292 1938 2176.65 2281       0.00
+15 1531 2201 2544.85 2616       0.00
+16 1754 2484 2877.62 2943       0.00
+17 2104 2782 3165.98 3235       0.00
+18 2449 3093 3412.65 3471       0.00
+19 2831 3351 3616.20 3671       0.00
+20 3228 3592 3779.30 3819       0.00
+21 3593 3806 3913.56 3958       0.00
+22 3896 3993 4019.82 4055       0.00
+23 4128 4079 4107.78 4147       0.18
+24 4234 4146 4176.27 4235       0.02
+25 4281 4194 4229.03 4280       0.00
+26 4286 4242 4266.02 4288       0.08
+27 4290 4270 4282.92 4290       0.14
+28 4290 4280 4288.21 4290       0.72
+29 4290 4286 4289.66 4290       1.00
+30 4290 4289 4289.93 4290       1.00
+
 
 > ergm_base <- network_comtrade ~ sum + 
 +   edgecov(network_comtrade, "CDT_vigente") +
@@ -843,3 +932,48 @@ all likelihood-based inference (LRT, Analysis of Deviance, AIC, BIC, etc.) is on
 valid between models with the same reference distribution and constraints.
 
 AIC: -229177  BIC: -229151  (Smaller is better. MC Std. Err. = 52.69)
+
+
+
+Goodness-of-fit for model statistics 
+
+                                obs   min     mean   max MC p-value
+sum                           63931 60561 63662.76 64553       0.58
+edgecov.sum.CDT_vigente       14348 13789 14243.10 14491       0.46
+mutual.min                    27606 24413 27442.53 27935       0.76
+transitiveweights.min.max.min 63816 60395 63548.45 64438       0.58
+
+Goodness-of-fit for cumulative distribution function 
+
+    obs  min    mean  max MC p-value
+0   794    0    0.64   51       0.00
+1   795    0    3.25  218       0.00
+2   795    0    6.98  375       0.00
+3   799    0   11.75  503       0.00
+4   801    2   19.54  579       0.00
+5   806   11   35.90  651       0.00
+6   818   35   71.03  702       0.00
+7   836   93  138.09  756       0.00
+8   860  205  254.63  831       0.00
+9   896  371  434.15  925       0.04
+10  933  613  683.76 1071       0.06
+11  983  936  999.77 1270       0.74
+12 1037 1286 1367.83 1541       0.00
+13 1139 1679 1765.52 1883       0.00
+14 1292 1955 2167.52 2256       0.00
+15 1531 2232 2548.59 2636       0.00
+16 1754 2512 2891.84 2960       0.00
+17 2104 2798 3184.21 3233       0.00
+18 2449 3054 3428.29 3488       0.00
+19 2831 3324 3632.66 3712       0.00
+20 3228 3570 3797.73 3873       0.00
+21 3593 3810 3929.18 3987       0.00
+22 3896 3995 4033.89 4084       0.00
+23 4128 4084 4115.13 4170       0.34
+24 4234 4149 4179.69 4249       0.14
+25 4281 4197 4223.73 4273       0.00
+26 4286 4239 4255.98 4290       0.06
+27 4290 4270 4279.19 4290       0.04
+28 4290 4281 4287.42 4290       0.20
+29 4290 4287 4289.50 4290       1.00
+30 4290 4288 4289.89 4290       1.00

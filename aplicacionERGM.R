@@ -69,27 +69,42 @@ pesos_log <- round(log(pesos_reales + 1))
 network_comtrade %e% "peso_logaritmo" <- pesos_log
 
 #ERGM base con solo los convenios y las estadísticas endógenas
-ergm_base <- network_comtrade ~ sum + 
-  edgecov(network_comtrade, "CDT_vigente") +
-  mutual(form="min") + 
-  transitiveweights("min", "max", "min")
+ergm_base <- network_comtrade ~ sum + mutual(form="min") + 
+  transitiveweights("min", "max", "min") + 
+  edgecov(network_comtrade, "CDT_vigente") 
 
 ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
                       control = control.ergm(parallel = nucleos, 
                                              parallel.type = "PSOCK"))
 summary(ergm.fit_base)
+# Bondad de ajuste
+gof1 <- gof(ergm.fit_base)
+par(mfrow=c(2,2))
+plot(gof1)
+gof1
 
+#ERGM base con solo los convenios y las estadísticas endógenas
+ergm_base <- network_comtrade ~ edges + mutual(form="min") + 
+  transitiveweights("min", "max", "min") + 
+  triangles+
+  edgecov(network_comtrade, "CDT_vigente") 
+
+ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
+                      control = control.ergm(parallel = nucleos, 
+                                             parallel.type = "PSOCK"))
+summary(ergm.fit_base)
+# Bondad de ajuste
 gof1 <- gof(ergm.fit_base)
 par(mfrow=c(2,2))
 plot(gof1)
 gof1
 
 # segundo ERGM base con convenios, distancia entre paises y las estadísticas endógenas
-ergm_paper <- network_comtrade ~ sum + 
-  edgecov(network_comtrade, "CDT_vigente") +
-  edgecov(network_comtrade, "norm_ln_dist") +
+ergm_paper <- network_comtrade ~ sum +
   mutual(form="min") + 
-  transitiveweights("min", "max", "min")
+  transitiveweights("min", "max", "min") +
+  edgecov(network_comtrade, "CDT_vigente") +
+  edgecov(network_comtrade, "norm_ln_dist") 
 
 # Modelo con la nueva respuesta
 ergm.fit.estructural <- ergm(formula = ergm_paper, 
@@ -98,7 +113,7 @@ ergm.fit.estructural <- ergm(formula = ergm_paper,
                              control = control.ergm(parallel = nucleos, 
                                                     parallel.type = "PSOCK"))
 summary(ergm.fit.estructural)
-
+# Bondad de ajuste
 gof2 <- gof(ergm.fit.estructural)
 par(mfrow=c(2,2))
 plot(gof2)
@@ -107,20 +122,19 @@ gof2
 # Tercer ERGM base con convenios, distancia entre paises, diferencia entre pib, pertenencia OMC
 # y las estadísticas endógenas
 
-ergm_paper_2 <- network_comtrade ~ sum + 
+ergm_paper_2 <- network_comtrade ~ sum + mutual(form="min") + 
+  transitiveweights("min", "max", "min") +
   edgecov(network_comtrade, "CDT_vigente") +
   edgecov(network_comtrade, "norm_ln_dist") +
   edgecov(network_comtrade, "fta_wto") +
-  absdiff("norm_ln_pib_per_capita_dolares_constantes_o") +
-  mutual(form="min") + 
-  transitiveweights("min", "max", "min")
+  absdiff("norm_ln_pib_per_capita_dolares_constantes_o") 
+  
 
 ergm.fit.paper_2 <- ergm(formula = ergm_paper_2, response='peso_logaritmo', reference = ~Poisson,
                        control = control.ergm(parallel = nucleos, 
                                               parallel.type = "PSOCK"))
 summary(ergm.fit.paper_2)
-
-
+# Bondad de ajuste
 gof3 <- gof(ergm.fit.estructural)
 par(mfrow=c(2,2))
 plot(gof3)
@@ -128,7 +142,9 @@ gof3
 
 
 # Cuarto ERGM con todas las variables exógenas y las endógenas
-ergm_base <- network_comtrade ~ sum +
+ergm_base <- network_comtrade ~ edges + sum +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min") +
   edgecov(network_comtrade, "CDT_vigente") + 
   edgecov(network_comtrade, "fta_wto") +    
   edgecov(network_comtrade, "norm_ln_dist") +
@@ -141,7 +157,7 @@ ergm_base <- network_comtrade ~ sum +
 ergm.fit.base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson)
 summary(ergm.fit.base)
 
-
+# Bondad de ajuste
 gof4 <- gof(ergm.fit.estructural)
 par(mfrow=c(2,2))
 plot(gof4)
