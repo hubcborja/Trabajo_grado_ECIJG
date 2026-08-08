@@ -84,20 +84,19 @@ plot(gof1)
 gof1
 
 #ERGM base con solo los convenios y las estadísticas endógenas
-ergm_base <- network_comtrade ~ edges + mutual(form="min") + 
+ergm_base_2 <- network_comtrade ~ edges + mutual(form="min") + 
   transitiveweights("min", "max", "min") + 
-  triangles+
   edgecov(network_comtrade, "CDT_vigente") 
 
-ergm.fit_base <- ergm(formula = ergm_base, response='peso_logaritmo', reference = ~Poisson,
+ergm.fit_base_2 <- ergm(formula = ergm_base_2, response='peso_logaritmo', reference = ~Poisson,
                       control = control.ergm(parallel = nucleos, 
                                              parallel.type = "PSOCK"))
-summary(ergm.fit_base)
+summary(ergm.fit_base_2)
 # Bondad de ajuste
-gof1 <- gof(ergm.fit_base)
+gof4 <- gof(ergm.fit_base_2)
 par(mfrow=c(2,2))
-plot(gof1)
-gof1
+plot(gof4)
+gof4
 
 # segundo ERGM base con convenios, distancia entre paises y las estadísticas endógenas
 ergm_paper <- network_comtrade ~ sum +
