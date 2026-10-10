@@ -141,15 +141,19 @@ modularity(comunidades)
 
 
 #ERGM base con solo los convenios y las estadísticas endógenas
-ergm_base <- network_comtrade ~ sum + mutual(form="min") + 
-  edgecov(network_comtrade, "CDT_vigente") 
-#transitiveweights("min", "max", "min") + 
+ergm_base <- network_comtrade ~ sum + nonzero +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min") +   # transitividad valuada
+  cyclicalweights("min", "max", "min") +     # ciclicidad valuada
+  nodeisqrtcovar +                           # concentración de fuerza de entrada
+  nodeosqrtcovar                             # concentración de fuerza de salida
 
 ergm.fit_base <- ergm(formula = ergm_base, 
                       response='ln_peso_comercio_total', 
                       reference = ~Poisson,
                       control = control.ergm(parallel = nucleos, 
-                                             parallel.type = "PSOCK",  
+                                             parallel.type = "PSOCK", 
+                                             MCMLE.maxit = 100,
                                              MCMC.samplesize = 8000,          
                                              MCMC.interval = 4096))
 summary(ergm.fit_base)
@@ -162,7 +166,12 @@ gof1
 
 
 # Segundo ERGM base con convenios, distancia entre paises y las estadísticas endógenas
-ergm_base2 <- network_comtrade ~ sum + mutual(form="min") + 
+ergm_base2 <- network_comtrade ~ sum + nonzero +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min") +   # transitividad valuada
+  cyclicalweights("min", "max", "min") +     # ciclicidad valuada
+  nodeisqrtcovar +                           # concentración de fuerza de entrada
+  nodeosqrtcovar +                            # concentración de fuerza de salida
   edgecov(network_comtrade, "CDT_vigente") +
   edgecov(network_comtrade, "ln_dist") 
 
@@ -171,7 +180,7 @@ ergm.fit.base2 <- ergm(formula = ergm_base2,
                        reference = ~Poisson,
                        control = control.ergm(parallel = nucleos, 
                                               parallel.type = "PSOCK",
-                                              MCMC.prop = ~triadic + sparse,   
+                                              MCMLE.maxit = 100, 
                                               MCMC.samplesize = 8000,          
                                               MCMC.interval = 4096))
 summary(ergm.fit.base2)
@@ -183,7 +192,12 @@ plot(gof2)
 gof2
 
 # Tercer ERGM base con convenios, distancia entre paises, diferencia entre pib, pertenencia OMC
-ergm_base3 <- network_comtrade ~ sum + mutual(form="min") + 
+ergm_base3 <- network_comtrade ~ sum + nonzero +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min") +   # transitividad valuada
+  cyclicalweights("min", "max", "min") +     # ciclicidad valuada
+  nodeisqrtcovar +                           # concentración de fuerza de entrada
+  nodeosqrtcovar +                            # concentración de fuerza de salida 
   edgecov(network_comtrade, "CDT_vigente") +
   edgecov(network_comtrade, "ln_dist") +
   edgecov(network_comtrade, "fta_wto") 
@@ -193,7 +207,7 @@ ergm.fit_base3 <- ergm(formula = ergm_base3,
                        reference = ~Poisson,
                        control = control.ergm(parallel = nucleos, 
                                               parallel.type = "PSOCK",
-                                              MCMC.prop = ~triadic + sparse,   
+                                              MCMLE.maxit = 100,  
                                               MCMC.samplesize = 8000,          
                                               MCMC.interval = 4096))
 
@@ -206,7 +220,12 @@ plot(gof3)
 gof3
 
 # Cuarto ERGM con todas las variables exógenas y las endógenas
-ergm_todas <- network_comtrade ~ sum + mutual(form="min") + 
+ergm_todas <- network_comtrade ~ sum + nonzero +
+  mutual(form="min") + 
+  transitiveweights("min", "max", "min") +   # transitividad valuada
+  cyclicalweights("min", "max", "min") +     # ciclicidad valuada
+  nodeisqrtcovar +                           # concentración de fuerza de entrada
+  nodeosqrtcovar +                           # concentración de fuerza de salida
   edgecov(network_comtrade, "CDT_vigente") + 
   edgecov(network_comtrade, "fta_wto") +   
   edgecov(network_comtrade, "ln_dist") +
@@ -218,7 +237,7 @@ ergm.fit.todas <- ergm(formula = ergm_todas,
                        reference = ~Poisson,
                        control = control.ergm(parallel = nucleos, 
                                               parallel.type = "PSOCK",
-                                              MCMC.prop = ~triadic + sparse,   
+                                              MCMLE.maxit = 100,  
                                               MCMC.samplesize = 8000,          
                                               MCMC.interval = 4096))
 
@@ -239,6 +258,7 @@ library(fastglm)
 # Definir el universo de los 217 países 
 paises_217 <- sort(unique(c(baseERGM24_limpia$iso3_o, baseERGM24_limpia$iso3_d)))
 n_paises <- length(paises_217)
+anios_panel = 2004:2024
 
 esqueleto_masivo <- expand_grid(
   year = 2004:2024,
@@ -247,19 +267,19 @@ esqueleto_masivo <- expand_grid(
 ) %>% 
   filter(iso3_o != iso3_d) # Quitamos la diagonal principal
 
-# 3. Rescatar variables estáticas (distancia y lenguaje) para que no se pierdan
+# Rescatar variables estáticas (distancia y lenguaje) para que no se pierdan
 vars_estaticas <- baseERGM %>%
   select(iso3_o, iso3_d, ln_dist, comlang_off) %>%
   filter(!is.na(ln_dist)) %>%
   distinct(iso3_o, iso3_d, .keep_all = TRUE)
 
-# 4. Cruzar el esqueleto masivo con base histórica
+# Cruzar esqueleto masivo con base histórica
 baseERGM_masiva <- esqueleto_masivo %>%
   left_join(baseERGM %>% select(-ln_dist, -comlang_off), 
             by = c("year", "iso3_o", "iso3_d")) %>%
   left_join(vars_estaticas, by = c("iso3_o", "iso3_d"))
 
-# 5. Rellenar los vacíos 
+# Rellenar vacíos 
 baseERGM_masiva <- baseERGM_masiva %>%
   mutate(
     peso_comercio_total = replace_na(peso_comercio_total, 0),
@@ -274,7 +294,7 @@ baseERGM_masiva <- baseERGM_masiva %>%
   ) %>%
   ungroup()
 
-# Validar que el panel quedó perfecto (Cada año DEBE tener 46,872 filas exactas)
+# Validar panel (Cada año DEBE tener 46,872 filas exactas)
 table(baseERGM_masiva$year)
 
 hacer_matriz <- function(df, variable, relleno = 0) {
@@ -322,7 +342,7 @@ cov_lang <- hacer_matriz(base_2024, "comlang_off")
 # Chequeo de sanidad
 sapply(lista_redes, network.density)
 
-# Modelo A — base (correr primero como prueba de humo)
+# Modelo A — base 
 f_base <- lista_redes ~ edges + mutual +
   edgecov(cov_CDT) + edgecov(cov_fta) +
   edgecov(cov_dist) + edgecov(cov_PIB) + edgecov(cov_lang) +
@@ -333,7 +353,7 @@ fit_prueba <- btergm(f_base, R = 50,
                      usefastglm = TRUE, verbose = TRUE)
 summary(fit_prueba)
 
-# Modelo B — completo (agrega dependencia triádica y reciprocidad rezagada)
+# Modelo B (agrega dependencia triádica y reciprocidad rezagada)
 f_full <- lista_redes ~ edges + mutual +
   gwesp(0.69, fixed = TRUE) +
   edgecov(cov_CDT) + edgecov(cov_fta) +
@@ -348,5 +368,29 @@ fit_final <- btergm(f_full, R = 500,
 summary(fit_final)
 
 gof_final <- gof(fit_final, nsim = 25,
-                 statistics = c(esp, geodesic, deg, rocpr))
+                 statistics = c(esp, dsp, geodesic, deg, 
+                                odeg, ideg,
+                                triad.directed,
+                                rocpr))
 plot(gof_final)
+
+f_endogena <- lista_redes ~ edges + mutual +
+  gwesp(0.69, fixed = TRUE) +        # cierre transitivo (transitividad)
+  ctriple +                          # ciclicidad (jerarquía si es negativo)
+  gwidegree(0.5, fixed = TRUE) +     # attachment preferencial: popularidad como importador
+  gwodegree(0.5, fixed = TRUE) +     # attachment preferencial: concentración exportadora
+  edgecov(cov_CDT) + edgecov(cov_fta) +
+  edgecov(cov_dist) + edgecov(cov_PIB) + edgecov(cov_lang) +
+  memory(type = "stability", lag = 1) +
+  delrecip(mutuality = FALSE, lag = 1)
+
+fit_endogena <- btergm(f_endogena, R = 50,
+                       parallel = "snow", ncpus = 4,
+                       usefastglm = TRUE, verbose = TRUE)
+
+summary(fit_endogena)
+
+gof_endogena <- gof(fit_endogena, nsim = 25,
+                 statistics = c(esp, dsp, geodesic, deg, odeg, ideg, rocpr))
+plot(gof_endogena)
+
