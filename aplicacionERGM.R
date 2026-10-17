@@ -24,7 +24,15 @@ nucleos <- detectCores() - 1
 # Importación de la base
 baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
 
-# Datos para 2014 y dejar las primeras columnas según los códigos ISO de primeras
+#conteo por año
+count(baseERGM, year)
+
+#Revision de valores faltantes
+colSums(is.na(baseERGM))
+
+baseERGM %>% filter(is.na(dist)) %>% count(iso3_o, iso3_d, sort = TRUE) %>% head(20)
+
+# Datos para 2024 y dejar las primeras columnas según los códigos ISO de primeras
 baseERGM24 <- baseERGM[baseERGM$year==2024, ]
 
 baseERGM24 <- baseERGM24 %>%
@@ -139,6 +147,8 @@ modularity(comunidades)
 #plot(network_comtrade, main = "peso_comercio_total", label = network.vertex.names(network_comtrade))
 #plot(network_comtrade, edge.lwd = baseERGM24_limpia$ln_peso_comercio_total, main = "peso_comercio_total")
 
+#Revision de valores faltantes
+colSums(is.na(baseERGM24_limpia))
 
 #ERGM base con solo los convenios y las estadísticas endógenas
 ergm_base <- network_comtrade ~ sum + nonzero +
@@ -255,6 +265,9 @@ gof4
 library(btergm)
 library(fastglm)
 
+#Revision de valores faltantes
+colSums(is.na(baseERGM))
+
 # Definir el universo de los 217 países 
 paises_217 <- sort(unique(c(baseERGM24_limpia$iso3_o, baseERGM24_limpia$iso3_d)))
 n_paises <- length(paises_217)
@@ -265,7 +278,7 @@ esqueleto_masivo <- expand_grid(
   iso3_o = paises_217,
   iso3_d = paises_217
 ) %>% 
-  filter(iso3_o != iso3_d) # Quitamos la diagonal principal
+  filter(iso3_o != iso3_d) # Quita la diagonal principal
 
 # Rescatar variables estáticas (distancia y lenguaje) para que no se pierdan
 vars_estaticas <- baseERGM %>%
@@ -296,6 +309,9 @@ baseERGM_masiva <- baseERGM_masiva %>%
 
 # Validar panel (Cada año DEBE tener 46,872 filas exactas)
 table(baseERGM_masiva$year)
+
+#Revision de valores faltantes
+colSums(is.na(baseERGM_masiva))
 
 hacer_matriz <- function(df, variable, relleno = 0) {
   m <- df %>%

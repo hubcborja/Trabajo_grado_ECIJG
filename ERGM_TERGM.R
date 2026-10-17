@@ -12,6 +12,16 @@ library(texreg)
 
 nucleos <- detectCores() - 1
 
+hacer_matriz <- function(df, variable, relleno = 0) {
+  m <- df %>% select(iso3_o, iso3_d, valor = all_of(variable)) %>%
+    pivot_wider(names_from = iso3_d, values_from = valor) %>% arrange(iso3_o)
+  filas <- m$iso3_o; m <- as.matrix(m[, -1]); rownames(m) <- filas
+  m <- m[reporteros, reporteros]
+  m[is.na(m) | is.infinite(m)] <- relleno
+  diag(m) <- 0
+  m
+}
+
 # Importación de la base
 baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
 
@@ -73,68 +83,91 @@ prueba_wilcox <- wilcox.test(ln_peso_comercio_total ~ CDT_factor,
 
 print(prueba_wilcox)
 
-# ── 2. Red 27×27: solo díadas entre reporteros ──
-reporteros <- sort(unique(baseERGM24$iso3_o))   # tus 27
+
+
+# Al inicio, una sola vez para todo el script
+rep_2024 <- sort(unique(baseERGM24$iso3_o))
+rep_tergm <- baseERGM %>% group_by(iso3_o) %>%
+  summarise(n = n_distinct(year)) %>% filter(n == 21) %>% pull(iso3_o) %>% sort()
+
+length(rep_2024); length(rep_tergm)
+setdiff(rep_2024, rep_tergm)
+
+reporteros <- baseERGM %>%
+  group_by(iso3_o) %>% summarise(n_anios = n_distinct(year)) %>%
+  filter(n_anios == 21) %>% pull(iso3_o) %>% sort()
+
 base27 <- baseERGM24 %>%
-  filter(iso3_d %in% reporteros) %>%
+  filter(iso3_o %in% reporteros, iso3_d %in% reporteros) %>%   # <- también filtra el origen
   mutate(ln_peso = round(ln_peso_comercio_total))
 
+nrow(base27)                          # ¿cuántas filas hay?
+length(reporteros) * (length(reporteros) - 1)   # ¿cuántas debería haber?
+sum(mat_cdt)                          # compara con el conteo del panel del TERGM
+sum(cov_CDT[[21]])  
+
 # Matriz valuada 27×27 con dimnames (adyacencia, no edgelist)
-hacer_mat <- function(df, var, relleno = 0) {
-  m <- df %>% select(iso3_o, iso3_d, v = all_of(var)) %>%
-    pivot_wider(names_from = iso3_d, values_from = v) %>% arrange(iso3_o)
-  r <- m$iso3_o; m <- as.matrix(m[,-1]); rownames(m) <- r
-  m <- m[reporteros, reporteros]
-  m[is.na(m)] <- relleno; diag(m) <- 0; m
-}
-mat_peso <- hacer_mat(base27, "ln_peso")
+
+b24 <- base_panel %>% filter(year == 2024) %>%
+  mutate(ln_peso = round(ln_peso_comercio_total))
+
+ggplot(b24, aes(x = ln_peso_comercio_total)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black", alpha = 0.7) +
+  theme_minimal() +
+  labs(x = "Log(Peso Comercio Total)",
+       y = "Frecuencia")
+
+mat_peso <- hacer_matriz(b24, "ln_peso")
+mat_cdt  <- hacer_matriz(b24, "CDT_vigente")
+mat_fta  <- hacer_matriz(b24, "fta_wto")
+mat_dist <- hacer_matriz(b24, "ln_dist")
+mat_pib  <- hacer_matriz(b24, "ln_gdp_prod")
+mat_lang <- hacer_matriz(b24, "comlang_off")
+
 red27 <- as.network(mat_peso, directed = TRUE, matrix.type = "adjacency",
                     ignore.eval = FALSE, names.eval = "ln_peso", loops = FALSE)
 
-mat_cdt  <- hacer_mat(base27, "CDT_vigente")
-mat_fta  <- hacer_mat(base27, "fta_wto")
-mat_dist <- hacer_mat(base27, "ln_dist", relleno = median(base27$ln_dist, na.rm=TRUE))
-mat_pib  <- hacer_mat(base27, "ln_gdp_prod", relleno = median(base27$ln_gdp_prod, na.rm=TRUE))
-mat_lang <- hacer_mat(base27, "comlang_off")
+# Verificaciones
+sum(mat_cdt) == sum(cov_CDT[[21]])    # debe dar TRUE
+dim(mat_peso)     
 
 # ── 3. Modelo por bloques — 
-# Bloque A (sin nonzero, edgecovs nombrados)
+# Bloque A: estructura endógena pura
 f_A <- red27 ~ sum + mutual(form = "min") +
-  edgecov(mat_cdt, attrname = "CDT")  +
-  edgecov(mat_fta, attrname = "FTA")  +
-  edgecov(mat_dist, attrname = "DIST") +
-  edgecov(mat_pib, attrname = "PIB")  +
-  edgecov(mat_lang, attrname = "LANG")
+  nodeicovar(transform = "sqrt") +
+  nodeocovar(transform = "sqrt")
 
 fit_A <- ergm(f_A, response = "ln_peso", reference = ~Poisson,
-              control = control.ergm(MCMLE.maxit = 100,
-                                     MCMC.samplesize = 8000,
+              control = control.ergm(MCMLE.termination = "Hummel",
+                                     MCMLE.maxit = 60,
+                                     MCMC.samplesize = 16000,
                                      MCMC.interval = 2048))
 
-summary(fit_A)
-# Bloque B: concentración de fuerza 
-f_B <- update(f_A, . ~ . + nodeicovar(transform = "sqrt") +
-                nodeocovar(transform = "sqrt"))
+# Bloque B: + dependencia triádica (completa el bloque endógeno)
+f_B <- update(f_A, . ~ . + transitiveweights("min","max","min"))
+
 fit_B <- ergm(f_B, response = "ln_peso", reference = ~Poisson,
-              control = control.ergm(
-                MCMLE.termination = "Hummel",   # criterio alternativo, sin el test que revienta
-                MCMLE.maxit = 60,
-                MCMC.samplesize = 16000,        
-                MCMC.interval = 2048))
-summary(fit_B)
-#mcmc.diagnostics(fit_B) 
-
-# Bloque C: triádicos valuados
-f_C <- update(f_B, . ~ . + transitiveweights("min","max","min") +
-                cyclicalweights("min","max","min"))
-fit_C <- ergm(f_C, response = "ln_peso", reference = ~Poisson,
-              control = control.ergm(MCMLE.maxit = 150,
+              control = control.ergm(MCMLE.termination = "Hummel",
+                                     MCMLE.maxit = 60,
                                      MCMC.samplesize = 8000,
                                      MCMC.interval = 2048))
-summary(fit_C)
-screenreg(list(fit_A, fit_B, fit_C),
-          custom.coef.names = NULL)  
 
+# Bloque C: + controles exógenos (gravedad e instituciones)
+f_C <- update(f_B, . ~ . +
+                edgecov(mat_pib,  attrname = "PIB")  +
+                edgecov(mat_dist, attrname = "DIST") +
+                edgecov(mat_lang, attrname = "LANG") +
+                edgecov(mat_fta,  attrname = "FTA")  +
+                edgecov(mat_cdt,  attrname = "CDT"))
+
+fit_C <- ergm(f_C, response = "ln_peso", reference = ~Poisson,
+              control = control.ergm(MCMLE.termination = "Hummel",
+                                     MCMLE.maxit = 100,
+                                     MCMC.samplesize = 8000,
+                                     MCMC.interval = 2048))
+
+screenreg(list(fit_A, fit_B, fit_C),
+          custom.model.names = c("Endógeno", "+ Triádico", "+ Controles"))
 
 
 ######################################
@@ -201,15 +234,7 @@ base_panel %>% group_by(year) %>%
 UMBRAL <- 1e8
 
 # ── 4. Construcción de listas temporales ─────────────────────────────────────
-hacer_matriz <- function(df, variable, relleno = 0) {
-  m <- df %>% select(iso3_o, iso3_d, valor = all_of(variable)) %>%
-    pivot_wider(names_from = iso3_d, values_from = valor) %>% arrange(iso3_o)
-  filas <- m$iso3_o; m <- as.matrix(m[, -1]); rownames(m) <- filas
-  m <- m[reporteros, reporteros]
-  m[is.na(m) | is.infinite(m)] <- relleno
-  diag(m) <- 0
-  m
-}
+
 
 lista_redes <- list(); cov_CDT <- list(); cov_fta <- list(); cov_PIB <- list()
 
@@ -240,7 +265,7 @@ f_A <- lista_redes ~ edges + mutual +
   memory(type = "stability", lag = 1) +
   delrecip(mutuality = FALSE, lag = 1)
 
-fit_A <- btergm(f_A, R = 50, parallel = "snow", ncpus = 4,
+fit_A <- btergm(f_A, R = 500, parallel = "snow", ncpus = 4,
                 usefastglm = TRUE, verbose = TRUE)
 summary(fit_A)
 
@@ -252,7 +277,7 @@ f_B <- lista_redes ~ edges + mutual +
   memory(type = "stability", lag = 1) +
   delrecip(mutuality = FALSE, lag = 1)
 
-fit_B <- btergm(f_B, R = 50, parallel = "snow", ncpus = 4,
+fit_B <- btergm(f_B, R = 500, parallel = "snow", ncpus = 4,
                 usefastglm = TRUE, verbose = TRUE)
 summary(fit_B)
 
@@ -265,7 +290,7 @@ f_C <- lista_redes ~ edges + mutual +
   memory(type = "stability", lag = 1) +
   delrecip(mutuality = FALSE, lag = 1)
 
-fit_C <- btergm(f_C, R = 50, parallel = "snow", ncpus = 4,
+fit_C <- btergm(f_C, R = 500, parallel = "snow", ncpus = 4,
                 usefastglm = TRUE, verbose = TRUE)
 summary(fit_C)
 
@@ -280,6 +305,85 @@ gof_final <- gof(fit_final, nsim = 100,
 plot(gof_final)
 
 screenreg(list(fit_A, fit_B, fit_C))
+
+
+idx <- which(anios_panel >= 2015)
+redes_10a <- lista_redes[idx]
+cdt_10a   <- cov_CDT[idx]
+fta_10a   <- cov_fta[idx]
+pib_10a   <- cov_PIB[idx]
+# cov_dist y cov_lang son matrices únicas: btergm las recicla, no se recortan
+
+f_10a <- redes_10a ~ edges + mutual +
+  gwesp(0.69, fixed = TRUE) + ctriple +
+  gwidegree(0.5, fixed = TRUE) + gwodegree(0.5, fixed = TRUE) +
+  edgecov(cdt_10a) + edgecov(fta_10a) +
+  edgecov(cov_dist) + edgecov(pib_10a) + edgecov(cov_lang) +
+  memory(type = "stability", lag = 1) +
+  delrecip(mutuality = FALSE, lag = 1)
+
+fit_10a <- btergm(f_10a, R = 500, parallel = "snow", ncpus = 4,
+                  usefastglm = TRUE, verbose = TRUE)
+
+summary(fit_10a)
+
+idx <- which(anios_panel >= 2020)
+redes_5a <- lista_redes[idx]
+cdt_5a   <- cov_CDT[idx]
+fta_5a   <- cov_fta[idx]
+pib_5a   <- cov_PIB[idx]
+# cov_dist y cov_lang son matrices únicas: btergm las recicla, no se recortan
+
+f_5a <- redes_5a ~ edges + mutual +
+  gwesp(0.69, fixed = TRUE) + ctriple +
+  gwidegree(0.5, fixed = TRUE) + gwodegree(0.5, fixed = TRUE) +
+  edgecov(cdt_5a) + edgecov(fta_5a) +
+  edgecov(cov_dist) + edgecov(pib_5a) + edgecov(cov_lang) +
+  memory(type = "stability", lag = 1) +
+  delrecip(mutuality = FALSE, lag = 1)
+
+fit_5a <- btergm(f_5a, R = 500, parallel = "snow", ncpus = 4,
+                 usefastglm = TRUE, verbose = TRUE)
+
+summary(fit_5a)
+
+screenreg(list(fit_final, fit_10a, fit_5a),
+          custom.model.names = c("2004-2024", "2015-2024", "2020-2024"))
+
+
+# ── 7. Robustez por umbral de binarización ──
+redes_con_umbral <- function(umbral) {
+  lapply(seq_along(anios_panel), function(i) {
+    bt <- base_panel %>% filter(year == anios_panel[i]) %>%
+      mutate(lazo = ifelse(peso_comercio_total > umbral, 1, 0))
+    as.network(hacer_matriz(bt, "lazo"), directed = TRUE,
+               matrix.type = "adjacency", loops = FALSE)
+  })
+}
+
+redes_50M  <- redes_con_umbral(5e7)
+redes_500M <- redes_con_umbral(5e8)
+
+sapply(redes_50M,  network.density)   # esperado 0.53 – 0.69
+sapply(redes_500M, network.density)   # esperado 0.26 – 0.42
+
+correr_umbral <- function(redes, R = 500) {
+  f <- redes ~ edges + mutual +
+    gwesp(0.69, fixed = TRUE) + ctriple +
+    gwidegree(0.5, fixed = TRUE) + gwodegree(0.5, fixed = TRUE) +
+    edgecov(cov_CDT) + edgecov(cov_fta) +
+    edgecov(cov_dist) + edgecov(cov_PIB) + edgecov(cov_lang) +
+    memory(type = "stability", lag = 1) +
+    delrecip(mutuality = FALSE, lag = 1)
+  btergm(f, R = R, parallel = "snow", ncpus = 4,
+         usefastglm = TRUE, verbose = FALSE)
+}
+
+fit_50M  <- correr_umbral(redes_50M)
+fit_500M <- correr_umbral(redes_500M)
+
+screenreg(list(fit_50M, fit_final, fit_500M),
+          custom.model.names = c("50M", "100M (base)", "500M"))
 
 # ¿Cuántas díadas tienen CDT=1 y quiénes son?
 i <- 21  # año 2024
