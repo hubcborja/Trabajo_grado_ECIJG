@@ -252,6 +252,20 @@ for (i in seq_along(anios_panel)) {
       round(network.density(lista_redes[[i]]), 3), "\n")
 }
 
+cdt_anual <- data.frame(
+  anio = anios_panel,
+  diadas_cdt = sapply(cov_CDT, sum),
+  prop = round(sapply(cov_CDT, sum) / (length(reporteros)*(length(reporteros)-1)), 3)
+)
+print(cdt_anual)
+
+# Convenios que entran en vigor: díadas que pasan de 0 a 1
+nuevos <- sapply(2:21, function(i) sum(cov_CDT[[i-1]] == 0 & cov_CDT[[i]] == 1))
+data.frame(anio = anios_panel[-1], nuevos_cdt = nuevos)
+
+# Total en el periodo
+cdt_anual$diadas_cdt[21] - cdt_anual$diadas_cdt[1]
+
 b24 <- base_panel %>% filter(year == 2024)
 cov_dist <- hacer_matriz(b24, "ln_dist", relleno = median(b24$ln_dist, na.rm = TRUE))
 cov_lang <- hacer_matriz(b24, "comlang_off")
