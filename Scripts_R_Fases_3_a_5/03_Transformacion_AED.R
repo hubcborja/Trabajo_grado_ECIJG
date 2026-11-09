@@ -31,16 +31,7 @@ reporteros <- baseERGM %>%
   sort()
 
 reporteros
-# 2. Carga de datos
-baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
 
-# Extraer vector 'reporteros' (Países con serie completa)
-reporteros <- baseERGM %>%
-  group_by(iso3_o) %>%
-  summarise(n = n_distinct(year)) %>%
-  filter(n == 21) %>%
-  pull(iso3_o) %>%
-  sort()
 
 # Datos para corte de EDA 2024
 baseERGM24 <- baseERGM %>% filter(year == 2024) %>%
@@ -68,14 +59,17 @@ print(wilcox.test(ln_peso_comercio_total ~ CDT_factor, data = baseERGM24_limpia)
 p1 <- ggplot(baseERGM24_limpia, aes(x = ln_peso_comercio_total)) +
   geom_histogram(binwidth = 1, fill = "steelblue", color = "black", alpha = 0.7) +
   theme_minimal() + labs(title = "Distribución del Logaritmo del Comercio Total", x = "Log(Comercio)", y = "Frecuencia")
+p1
 
 p2 <- ggplot(baseERGM24_limpia, aes(x = CDT_factor, y = ln_peso_comercio_total, fill = CDT_factor)) +
   geom_boxplot(alpha = 0.6) + theme_minimal() + theme(legend.position = "none") +
   labs(title = "Comercio vs CDT", x = "", y = "Log(Comercio)")
+p2
 
 p3 <- ggplot(baseERGM24_limpia, aes(x = ln_dist, y = ln_peso_comercio_total)) +
   geom_point(alpha = 0.3, color = "darkred") + geom_smooth(method = "lm", color = "blue", se = TRUE) +
   theme_minimal() + labs(title = "Gravedad: Distancia vs Comercio")
+p3
 
 # 5. Cálculo de Evolución Topológica (Tabla de la tesis)
 df_redes <- baseERGM %>% filter(peso_comercio_total > 0)
@@ -94,6 +88,7 @@ calcular_metricas_red <- function(df_year) {
 }
 
 tabla_topologica <- df_redes %>% group_by(year) %>% group_split() %>% map_dfr(calcular_metricas_red)
+tabla_topologica
 write.csv(tabla_topologica, "tabla_topologica_evolucion.csv", row.names = FALSE)
 
 # 6. Red Ego de Colombia (2024 - Top 15 Socios)
@@ -119,7 +114,7 @@ dev.off()
 
 
 # ==============================================================================
-# 7. EVOLUCIÓN ESTRUCTURAL DE LA RED (Grilla Multipanel de la Tesis)
+# 7. EVOLUCIÓN ESTRUCTURAL DE LA RED 
 # ==============================================================================
 
 # A. Definición de la grilla de años y grupos económicos
