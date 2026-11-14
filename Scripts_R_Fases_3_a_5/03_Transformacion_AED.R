@@ -21,6 +21,8 @@ library(countrycode)
 
 baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
 
+# conteo por año para verificar uniformidad
+baseERGM %>% count(year)
 
 # Extraer vector 'reporteros' (Países con serie completa)
 reporteros <- baseERGM %>%
@@ -33,18 +35,21 @@ reporteros <- baseERGM %>%
 reporteros
 
 
+
 # Datos para corte de EDA 2024
 baseERGM24 <- baseERGM %>% filter(year == 2024) %>%
   mutate(across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm = TRUE), .)))
 
 baseERGM24_limpia <- baseERGM24 %>%
-  select(iso3_o, iso3_d, ln_peso_comercio_total, ln_dist, ln_gdp_prod, CDT_vigente, fta_wto, comlang_off) %>%
   mutate(
     CDT_factor = ifelse(CDT_vigente == 1, "Con CDT", "Sin CDT"),
     FTA_factor = ifelse(fta_wto == 1, "Con TLC/OMC", "Sin TLC/OMC")
   )
 
 # 3. Análisis Exploratorio Estadístico (Pruebas de Hipótesis)
+summary(baseERGM24_limpia$peso_comercio_total)
+summary(baseERGM24_limpia$ln_peso_comercio_total)
+
 cat("\n--- Resumen de Medias por CDT ---\n")
 print(baseERGM24_limpia %>% group_by(CDT_factor) %>%
         summarise(N = n(), Media = mean(ln_peso_comercio_total, na.rm = TRUE)))

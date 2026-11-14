@@ -14,8 +14,8 @@
 #install.packages("ergm")
 #install.packages("btergm")
 #install.packages("parallel")
-install.packages("logistf")
-install.packages("pROC")
+#install.packages("logistf")
+#install.packages("pROC")
 
 library(tidyverse)
 library(network)
@@ -55,7 +55,7 @@ base_panel <- expand_grid(year = 2004:2024, iso3_o = reporteros, iso3_d = report
     ln_gdp_prod = ifelse(is.na(ln_gdp_prod), median(ln_gdp_prod, na.rm=TRUE), ln_gdp_prod)
   )
 
-# Función para asegurar alineación exacta de filas y columnas (por indexación)
+# Función para asegurar alineación exacta de filas y columnas 
 hacer_matriz <- function(df, var, nodos = reporteros) {
   mat <- matrix(0, length(nodos), length(nodos), dimnames = list(nodos, nodos))
   mat[cbind(match(df$iso3_o, nodos), match(df$iso3_d, nodos))] <- df[[var]]
@@ -99,6 +99,7 @@ f_M1 <- redes_train ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
   memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
   edgecov(pa_in_train) + edgecov(pa_out_train) 
 fit_M1 <- btergm(f_M1, R = reps, parallel = "snow", ncpus = nucleos)
+summary(fit_M1)
 
 f_M2 <- update(f_M1, ~ . + edgecov(fta_train) + edgecov(mat_dist) + edgecov(pib_train) + edgecov(mat_lang))
 fit_M2 <- btergm(f_M2, R = reps, parallel = "snow", ncpus = nucleos)
