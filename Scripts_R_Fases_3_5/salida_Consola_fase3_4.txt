@@ -1,0 +1,1817 @@
+> options(scipen = 999)
+> library(tidyverse)
+── Attaching core tidyverse packages ─────────────────────────────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.2.1     ✔ readr     2.2.0
+✔ forcats   1.0.1     ✔ stringr   1.6.0
+✔ ggplot2   4.0.3     ✔ tibble    3.3.1
+✔ lubridate 1.9.5     ✔ tidyr     1.3.2
+✔ purrr     1.2.2     
+── Conflicts ───────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package to force all conflicts to become errors
+> library(igraph)
+
+Adjuntando el paquete: ‘igraph’
+
+The following objects are masked from ‘package:lubridate’:
+
+    %--%, union
+
+The following objects are masked from ‘package:dplyr’:
+
+    as_data_frame, groups, union
+
+The following objects are masked from ‘package:purrr’:
+
+    compose, simplify
+
+The following object is masked from ‘package:tidyr’:
+
+    crossing
+
+The following object is masked from ‘package:tibble’:
+
+    as_data_frame
+
+The following objects are masked from ‘package:stats’:
+
+    decompose, spectrum
+
+The following object is masked from ‘package:base’:
+
+    union
+> library(graphlayouts)
+> library(countrycode)
+> 
+> # Crear directorios de salida si no existen
+> dir.create("Salidas/tablas", recursive = TRUE, showWarnings = FALSE)
+> dir.create("Salidas/figuras", recursive = TRUE, showWarnings = FALSE)
+> 
+> #===========================================
+> # Carga del CSV base completa 
+> #===========================================
+> 
+> baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
+> 
+> # 100 millones USD
+> UMBRAL_TERGM <- 1e8 
+> anios_panel <- 2004:2024
+> 
+> #===========================================
+> # verificaciones base de datos
+> #===========================================
+> 
+> # conteo por año para verificar uniformidad
+> baseERGM %>% count(year)
+   year    n
+1  2004 3422
+2  2005 3422
+3  2006 3422
+4  2007 3422
+5  2008 3422
+6  2009 3422
+7  2010 3422
+8  2011 3422
+9  2012 3422
+10 2013 3422
+11 2014 3422
+12 2015 3422
+13 2016 3422
+14 2017 3422
+15 2018 3422
+16 2019 3422
+17 2020 3422
+18 2021 3422
+19 2022 3422
+20 2023 3422
+21 2024 3422
+> 
+> # logaritmo de exportaciones
+> baseERGM$ln_X <- log1p(baseERGM$X)
+> 
+> # Extraer vector 'reporteros' (Países con serie completa)
+> reporteros <- baseERGM %>%
++   group_by(iso3_o) %>%
++   summarise(n = n_distinct(year)) %>%
++   filter(n == 21) %>%
++   pull(iso3_o) %>%
++   sort()
+> 
+> reporteros
+ [1] "ARE" "ARG" "AUS" "AUT" "BEL" "BOL" "BRA" "BRN" "CAN" "CHE" "CHL" "CHN" "COL" "CRI" "CZE" "DEU"
+[17] "DNK" "ECU" "ESP" "EST" "FIN" "FRA" "GBR" "GRC" "GUY" "HUN" "IDN" "IND" "IRL" "ISL" "ISR" "ITA"
+[33] "JPN" "KHM" "KOR" "LTU" "LUX" "LVA" "MEX" "MYS" "NLD" "NOR" "NZL" "PAN" "PER" "PHL" "POL" "PRT"
+[49] "PRY" "SGP" "SUR" "SVK" "SVN" "SWE" "THA" "TUR" "URY" "USA" "VNM"
+> 
+> # Datos para corte de EDA 2024
+> baseERGM24 <- baseERGM %>% filter(year == 2024) %>%
++   mutate(across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm = TRUE), .)))
+> 
+> baseERGM24_limpia <- baseERGM24 %>%
++   mutate(
++     CDT_factor = ifelse(CDT_vigente == 1, "Con CDT", "Sin CDT"),
++     FTA_factor = ifelse(fta_wto == 1, "Con TLC/OMC", "Sin TLC/OMC")
++   )
+> 
+> cat("\n--- Cuantiles de Exportaciones (X) en 2024 ---\n")
+
+--- Cuantiles de Exportaciones (X) en 2024 ---
+> 
+> print(summary(baseERGM24_limpia$X))
+        Min.      1st Qu.       Median         Mean      3rd Qu.         Max. 
+           0      3108365     74571364   2755477653    706317502 483133661110 
+> print(quantile(baseERGM24_limpia$X, probs = c(0.25, 0.45, 0.50, 0.54, 0.75, 0.90)))
+       25%        45%        50%        54%        75%        90% 
+   3108365   42765351   74571364  111226581  706317503 3992837328 
+> 
+> cat("Porcentaje de díadas que superan 100M USD en 2024 (Densidad):", mean(baseERGM24_limpia$X > 1e8), "\n")
+Porcentaje de díadas que superan 100M USD en 2024 (Densidad): 0.4693162 
+> 
+> cat("\n--- Resumen de Medias y Medianas de ln_X por CDT (2024) ---\n")
+
+--- Resumen de Medias y Medianas de ln_X por CDT (2024) ---
+> print(
++   baseERGM24_limpia %>%
++     group_by(CDT_factor) %>%
++     summarise(
++       N = n(),
++       Media_lnX = mean(ln_X, na.rm = TRUE),
++       DE_lnX = sd(ln_X, na.rm = TRUE),
++       Mediana_lnX = median(ln_X, na.rm = TRUE),
++       IQR_lnX = IQR(ln_X, na.rm = TRUE)
++     )
++ )
+# A tibble: 2 × 6
+  CDT_factor     N Media_lnX DE_lnX Mediana_lnX IQR_lnX
+  <chr>      <int>     <dbl>  <dbl>       <dbl>   <dbl>
+1 Con CDT      734      19.1   3.57        19.6    3.79
+2 Sin CDT     2688      16.0   6.12        17.5    6.10
+> 
+> cat("\n--- Prueba T de Welch (sobre ln_X) ---\n")
+
+--- Prueba T de Welch (sobre ln_X) ---
+> print(t.test(ln_X ~ CDT_factor, data = baseERGM24_limpia, var.equal = FALSE))
+
+	Welch Two Sample t-test
+
+data:  ln_X by CDT_factor
+t = 17.1, df = 2024.2, p-value < 0.00000000000000022
+alternative hypothesis: true difference in means between group Con CDT and group Sin CDT is not equal to 0
+95 percent confidence interval:
+ 2.677331 3.370975
+sample estimates:
+mean in group Con CDT mean in group Sin CDT 
+             19.05614              16.03199 
+
+> 
+> cat("\n--- Prueba de Wilcoxon (sobre ln_X) ---\n")
+
+--- Prueba de Wilcoxon (sobre ln_X) ---
+> print(wilcox.test(ln_X ~ CDT_factor, data = baseERGM24_limpia))
+
+	Wilcoxon rank sum test with continuity correction
+
+data:  ln_X by CDT_factor
+W = 1302654, p-value < 0.00000000000000022
+alternative hypothesis: true location shift is not equal to 0
+
+> 
+> 
+> # 4. Visualizaciones (GGPlot)
+> p1 <- ggplot(baseERGM24_limpia, aes(x = ln_X)) +
++   geom_histogram(binwidth = 1, fill = "steelblue", color = "black", alpha = 0.7) +
++   geom_vline(xintercept = log1p(UMBRAL_TERGM), color = "red", linetype = "dashed", linewidth = 1) +
++   theme_minimal() +
++   labs(x = "Log(Exportaciones + 1)", y = "Frecuencia")
+> print(p1)
+> 
+> p2 <- ggplot(baseERGM24_limpia, aes(x = CDT_factor, y = ln_X, fill = CDT_factor)) +
++   geom_boxplot(alpha = 0.6) +
++   theme_minimal() +
++   theme(legend.position = "none") +
++   labs(x = "", y = "Log(Exportaciones + 1)")
+> print(p2)
+> 
+> p3 <- ggplot(baseERGM24_limpia, aes(x = ln_dist, y = ln_X)) +
++   geom_point(alpha = 0.3, color = "darkred") +
++   geom_smooth(method = "lm", color = "blue", se = TRUE) +
++   theme_minimal() +
++   labs(x = "Log(Distancia)", y = "Log(Exportaciones + 1)")
+> print(p3)
+`geom_smooth()` using formula = 'y ~ x'
+> 
+> # 5. Cálculo de Evolución Topológica 
+> umbrales <- c("50M" = 5e7, "100M" = 1e8, "500M" = 5e8, "1000M" = 1e9, "5000M" = 5e9)
+> 
+> barrido_X <- sapply(umbrales, function(u) {
++   sapply(anios_panel, function(y) {
++     df_t <- baseERGM %>% filter(year == y)
++     mean(df_t$X > u)
++   })
++ })
+> rownames(barrido_X) <- anios_panel
+> cat("\n--- Barrido de Densidades sobre Exportaciones (X) ---\n")
+
+--- Barrido de Densidades sobre Exportaciones (X) ---
+> print(round(barrido_X, 3))
+       50M  100M  500M 1000M 5000M
+2004 0.390 0.315 0.166 0.111 0.034
+2005 0.407 0.344 0.179 0.124 0.038
+2006 0.430 0.366 0.200 0.136 0.045
+2007 0.456 0.392 0.222 0.158 0.053
+2008 0.476 0.415 0.239 0.177 0.060
+2009 0.454 0.381 0.213 0.150 0.047
+2010 0.470 0.399 0.234 0.165 0.055
+2011 0.491 0.424 0.255 0.189 0.064
+2012 0.494 0.430 0.254 0.185 0.064
+2013 0.500 0.430 0.258 0.189 0.064
+2014 0.506 0.433 0.258 0.191 0.062
+2015 0.496 0.422 0.242 0.175 0.055
+2016 0.501 0.421 0.241 0.176 0.056
+2017 0.510 0.437 0.256 0.189 0.063
+2018 0.518 0.446 0.267 0.197 0.068
+2019 0.513 0.444 0.262 0.193 0.066
+2020 0.507 0.432 0.245 0.188 0.062
+2021 0.527 0.456 0.273 0.209 0.076
+2022 0.541 0.479 0.293 0.222 0.087
+2023 0.544 0.471 0.291 0.217 0.087
+2024 0.538 0.469 0.291 0.216 0.087
+> 
+> # Función de matriz indexada
+> hacer_matriz <- function(df, var, nodos = reporteros) {
++   mat <- matrix(0, length(nodos), length(nodos), dimnames = list(nodos, nodos))
++   mat[cbind(match(df$iso3_o, nodos), match(df$iso3_d, nodos))] <- df[[var]]
++   diag(mat) <- 0
++   stopifnot(!anyNA(mat))
++   return(mat)
++ }
+> 
+> tabla_topologica <- map_dfr(anios_panel, function(y) {
++   df_t <- baseERGM %>%
++     filter(year == y) %>%
++     mutate(lazo_binario = ifelse(X > UMBRAL_TERGM, 1, 0))
++   
++   A <- hacer_matriz(df_t, "lazo_binario")
++   g <- graph_from_adjacency_matrix(A, mode = "directed")
++   
++   tibble(
++     Year = y,
++     Nodos = vcount(g),
++     Aristas = ecount(g),
++     Densidad = round(edge_density(g), 3),
++     Agrupamiento = round(transitivity(g, type = "global"), 3),
++     Reciprocidad = round(reciprocity(g), 3),
++     Distancia_Media = round(mean_distance(g, directed = TRUE, weights = NA), 3)
++   )
++ })
+> 
+> cat("\n--- Tabla Topológica (Red Dirigida X > 100M USD) ---\n")
+
+--- Tabla Topológica (Red Dirigida X > 100M USD) ---
+> print(as.data.frame(tabla_topologica))
+   Year Nodos Aristas Densidad Agrupamiento Reciprocidad Distancia_Media
+1  2004    59    1077    0.315        0.671        0.761           1.678
+2  2005    59    1176    0.344        0.690        0.767           1.658
+3  2006    59    1253    0.366        0.707        0.779           1.650
+4  2007    59    1340    0.392        0.722        0.775           1.596
+5  2008    59    1421    0.415        0.746        0.797           1.582
+6  2009    59    1304    0.381        0.721        0.787           1.627
+7  2010    59    1367    0.399        0.728        0.796           1.600
+8  2011    59    1452    0.424        0.736        0.802           1.573
+9  2012    59    1471    0.430        0.744        0.790           1.553
+10 2013    59    1472    0.430        0.743        0.783           1.562
+11 2014    59    1482    0.433        0.745        0.768           1.548
+12 2015    59    1443    0.422        0.731        0.779           1.574
+13 2016    59    1442    0.421        0.731        0.781           1.594
+14 2017    59    1495    0.437        0.737        0.796           1.562
+15 2018    59    1526    0.446        0.743        0.802           1.554
+16 2019    59    1520    0.444        0.744        0.804           1.558
+17 2020    59    1479    0.432        0.735        0.801           1.574
+18 2021    59    1562    0.456        0.747        0.802           1.540
+19 2022    59    1639    0.479        0.756        0.807           1.516
+20 2023    59    1612    0.471        0.755        0.797           1.524
+21 2024    59    1606    0.469        0.754        0.801           1.526
+> write.csv(tabla_topologica, "Salidas/tablas/tabla_topologica_evolucion.csv", row.names = FALSE)
+> 
+> # 6. Red Ego de Colombia (2024 - Top 15 Socios)
+> df_redes_100M <- baseERGM %>% filter(year == 2024 & X > UMBRAL_TERGM)
+> 
+> # 1. Identificar exactamente los 15 socios principales sumando el flujo bilateral X con COL
+> socios_top15 <- df_redes_100M %>%
++   filter(iso3_o == "COL" | iso3_d == "COL") %>%
++   mutate(socio = ifelse(iso3_o == "COL", iso3_d, iso3_o)) %>%
++   group_by(socio) %>%
++   summarise(flujo_max = max(X), .groups = "drop") %>%
++   arrange(desc(flujo_max)) %>%
++   slice(1:15) %>%
++   pull(socio)
+> 
+> nodos_ego <- c("COL", socios_top15)
+> 
+> # 2. Filtrar las aristas donde AMBOS nodos pertenezcan a la red ego (COL + Top 15)
+> df_ego_col <- df_redes_100M %>%
++   filter(iso3_o %in% nodos_ego & iso3_d %in% nodos_ego)
+> 
+> ego_col <- graph_from_data_frame(df_ego_col[, c("iso3_o", "iso3_d")], directed = TRUE, vertices = nodos_ego)
+> 
+> # 3. Asignar colores sin usar ifelse() sobre secuencias de igraph (evita Invalid indexing)
+> V(ego_col)$color <- ifelse(V(ego_col)$name == "COL", "tomato", "gray85")
+> 
+> # Primero pintamos todas las aristas entre terceros (naranja tenue) y luego sobrescribimos las de COL (azul)
+> E(ego_col)$color <- adjustcolor("orange", alpha.f = 0.25)
+> E(ego_col)[.from("COL") | .to("COL")]$color <- "dodgerblue3"
+> 
+> # 4. Layout circular con Colombia en el centro exacto (0, 0)
+> l <- layout_in_circle(ego_col)
+> idx_col <- which(V(ego_col)$name == "COL")
+> nodos_resto <- setdiff(seq_len(vcount(ego_col)), idx_col)
+> angulos <- seq(0, 2 * pi, length.out = length(nodos_resto) + 1)[-(length(nodos_resto) + 1)]
+> l[nodos_resto, ] <- cbind(cos(angulos), sin(angulos))
+> l[idx_col, ] <- c(0, 0)
+> 
+> png("Salidas/figuras/ego_network_colombia.png", width = 2000, height = 2000, res = 300)
+> plot(
++   ego_col,
++   layout = l,
++   vertex.size = ifelse(V(ego_col)$name == "COL", 20, 9),
++   vertex.label.color = "black",
++   vertex.label.cex = 0.85,
++   edge.arrow.size = 0.35,
++   main = "Red Ego de Exportaciones de Colombia (2024)"
++ )
+> dev.off()
+RStudioGD 
+        2 
+> # ==============================================================================
+> # 7. EVOLUCIÓN ESTRUCTURAL DE LA RED 
+> # ==============================================================================
+> 
+> library(ggraph) # o graphlayouts para layout_with_stress
+Aviso:
+package ‘ggraph’ was built under R version 4.6.2 
+> 
+> # A. Definición de la grilla de años y grupos económicos (59 países activos)
+> anios_panel <- 2004:2024
+> anios_fig   <- c(2004, 2014, 2020, 2024) 
+> 
+> can      <- c("BOL", "ECU", "PER", "COL")         
+> asean    <- c("BRN", "KHM", "IDN", "MYS", "PHL", "SGP", "THA", "VNM") # Sin LAO ni MMR
+> ocde     <- c("AUS","AUT","BEL","CAN","CHL","CZE","DNK","EST","FIN","FRA",
++               "DEU","GRC","HUN","ISL","IRL","ISR","ITA","JPN","KOR","LVA",
++               "LTU","LUX","MEX","NLD","NZL","NOR","POL","PRT","SVK","SVN",
++               "ESP","SWE","CHE","TUR","GBR","USA","CRI")
+> mercosur <- c("ARG", "BRA", "PRY", "URY")
+> 
+> grupo_de <- function(iso) {
++   dplyr::case_when(
++     iso == "COL"             ~ "Colombia",
++     iso %in% c("CHN", "IND") ~ "Asia emergente",
++     iso %in% can             ~ "CAN",
++     iso %in% asean           ~ "ASEAN",
++     iso %in% ocde            ~ "OCDE",
++     iso %in% mercosur        ~ "Mercosur",
++     TRUE                     ~ "Otros" # Agrupa a ARE, GUY, PAN, SUR
++   )
++ }
+> 
+> # Verificación de clasificación (suma exacta de 59 economías)
+> cat("\n--- Clasificación de Países por Bloque Económico ---\n")
+
+--- Clasificación de Países por Bloque Económico ---
+> print(table(grupo_de(reporteros)))
+
+         ASEAN Asia emergente            CAN       Colombia       Mercosur           OCDE 
+             8              2              3              1              4             37 
+         Otros 
+             4 
+> 
+> # B. Panel Base Balanceado (baseERGM ya viene balanceada desde Python con 71.862 filas)
+> base_panel <- baseERGM %>%
++   mutate(
++     X = replace_na(X, 0),
++     peso_comercio_total = replace_na(peso_comercio_total, 0)
++   )
+> 
+> stopifnot(nrow(base_panel) == 59 * 58 * 21)
+> 
+> # Construir la lista de redes binarias dirigidas (umbral de 100M USD sobre X)
+> lista_redes <- list()
+> 
+> for (i in seq_along(anios_panel)) {
++   bt <- base_panel %>%
++     filter(year == anios_panel[i]) %>%
++     mutate(lazo = ifelse(X > UMBRAL_TERGM, 1, 0))
++   lista_redes[[i]] <- hacer_matriz(bt, "lazo")
++ }
+> 
+> # D. Configuración Visual Constante (Layout Fijo con semilla reproducible)
+> set.seed(2026)
+> g_ref <- graph_from_adjacency_matrix(lista_redes[[which(anios_panel == max(anios_fig))]], mode = "directed")
+> layout_fijo <- graphlayouts::layout_with_stress(g_ref)
+> rownames(layout_fijo) <- V(g_ref)$name
+> 
+> paleta <- c(
++   "Colombia"       = "#D64545", 
++   "CAN"            = "#E89C3F", 
++   "Mercosur"       = "#E8C33F",
++   "Asia emergente" = "#690101", 
++   "ASEAN"          = "#4A9D5B", 
++   "OCDE"           = "#4A7BA7", 
++   "Otros"          = "#B0B0B0"
++ )
+> 
+> # E. Función Generadora de Panel (Ponderada por Exportaciones X)
+> dibujar_panel <- function(anio) {
++   i <- which(anios_panel == anio)
++   A <- lista_redes[[i]]
++   g <- graph_from_adjacency_matrix(A, mode = "directed")
++   
++   grado <- degree(g, mode = "all")
++   V(g)$size <- 3 + 8 * (grado / max(grado))
++   
++   pesos <- base_panel %>% filter(year == anio) %>% select(iso3_o, iso3_d, X)
++   el <- as_edgelist(g)
++   w <- log1p(pesos$X[match(paste(el[, 1], el[, 2]), paste(pesos$iso3_o, pesos$iso3_d))])
++   E(g)$width <- 0.2 + 1.8 * (w - min(w, na.rm = TRUE)) / diff(range(w, na.rm = TRUE))
++   
++   es_col <- V(g)$name == "COL"
++   V(g)$label <- V(g)$name
++   V(g)$label.cex <- ifelse(es_col, 0.85, 0.7)
++   V(g)$color <- paleta[grupo_de(V(g)$name)]
++   V(g)$frame.color <- ifelse(es_col, "black", "transparent")
++   
++   plot(
++     g,
++     layout = layout_fijo[V(g)$name, ],
++     vertex.label.dist = 0.8,    
++     vertex.label.degree = pi / 2,   
++     vertex.label.color = "black",
++     vertex.label.family = "sans",
++     edge.color = adjustcolor("#8FA8BE", alpha.f = 0.18),
++     edge.arrow.size = 0.15,
++     edge.curved = 0.1,
++     margin = c(0.05, 0.05, 0.05, 0.05),
++     main = paste0("(", letters[which(anios_fig == anio)], ") ", anio),
++     cex.main = 1.6
++   )
++ }
+> 
+> # F. Impresión de la Cuadrícula Gráfica
+> png("Salidas/figuras/figura_redes_comercio.png", width = 3000, height = 3200, res = 300)
+> layout(matrix(c(1, 2, 3, 4, 5, 5), nrow = 3, byrow = TRUE), heights = c(5, 5, 0.7))
+> par(mar = c(1, 1, 2.5, 1))
+> for (a in anios_fig) dibujar_panel(a)
+> par(mar = c(0, 0, 0, 0))
+> plot.new()
+> legend(
++   "center", legend = names(paleta), pt.bg = paleta,
++   pch = 21, pt.cex = 2.2, horiz = TRUE, bty = "n", cex = 1.3
++ )
+> dev.off()
+RStudioGD 
+        2 
+> 
+> # G. Verificación de Completitud (59 activos vs. 5 excluidos en preprocesamiento)
+> excluidos_preprocesamiento <- c("CUB", "LAO", "MMR", "TLS", "VEN")
+> cat("\n--- Países Excluidos por Discontinuidad Estructural (>5 años) ---\n")
+
+--- Países Excluidos por Discontinuidad Estructural (>5 años) ---
+> print(excluidos_preprocesamiento)
+[1] "CUB" "LAO" "MMR" "TLS" "VEN"
+> 
+> cat("\n--- Verificación de Cobertura Completa en Casos Imputados (t-1) ---\n")
+
+--- Verificación de Cobertura Completa en Casos Imputados (t-1) ---
+> base_panel %>%
++   filter(iso3_o %in% c("ARE", "BRN", "VNM")) %>%
++   group_by(iso3_o) %>%
++   summarise(
++     anios_activos = n_distinct(year),
++     faltante = paste(setdiff(2004:2024, unique(year)), collapse = ", ")
++   ) %>%
++   print()
+# A tibble: 3 × 3
+  iso3_o anios_activos faltante
+  <chr>          <int> <chr>   
+1 ARE               21 ""      
+2 BRN               21 ""      
+3 VNM               21 ""      
+> 
+
+> library(tidyverse)
+── Attaching core tidyverse packages ─────────────────────────────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.2.1     ✔ readr     2.2.0
+✔ forcats   1.0.1     ✔ stringr   1.6.0
+✔ ggplot2   4.0.3     ✔ tibble    3.3.1
+✔ lubridate 1.9.5     ✔ tidyr     1.3.2
+✔ purrr     1.2.2     
+── Conflicts ───────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package to force all conflicts to become errors
+> library(network)
+
+‘network’ 1.20.0 (2026-02-06), part of the Statnet Project
+* ‘news(package="network")’ for changes since last version
+* ‘citation("network")’ for citation information
+* ‘https://statnet.org’ for help, support, and other information
+> library(ergm)
+
+‘ergm’ 4.12.0 (2026-02-17), part of the Statnet Project
+* ‘news(package="ergm")’ for changes since last version
+* ‘citation("ergm")’ for citation information
+* ‘https://statnet.org’ for help, support, and other information
+
+‘ergm’ 4 is a major update that introduces some backwards-incompatible changes. Please type
+‘news(package="ergm")’ for a list of major changes.
+> library(btergm)
+Package:  btergm
+Version:  1.11.1
+Date:     2025-03-19
+Authors:  Philip Leifeld (University of Manchester)
+          Skyler J. Cranmer (The Ohio State University)
+          Bruce A. Desmarais (Pennsylvania State University)
+
+
+Adjuntando el paquete: ‘btergm’
+
+The following object is masked from ‘package:ergm’:
+
+    gof
+> library(texreg)
+Version:  1.40
+Date:     2026-08-24
+Author:   Philip Leifeld (University of Manchester)
+
+Consider submitting praise using the praise or praise_interactive functions.
+Please cite the JSS article in your publications -- see citation("texreg").
+
+Adjuntando el paquete: ‘texreg’
+
+The following object is masked from ‘package:tidyr’:
+
+    extract
+> library(parallel)
+> 
+> 
+> # Crear directorios de salida si no existen
+> dir.create("Salidas/tablas", recursive = TRUE, showWarnings = FALSE)
+> dir.create("Salidas/figuras", recursive = TRUE, showWarnings = FALSE)
+> 
+> # ==============================================================================
+> # 1. IMPORTACIÓN Y PREPARACIÓN DE MATRICES RELACIONALES (59 PAÍSES)
+> # ==============================================================================
+> baseERGM <- read.csv("bases_datos/base_comercio_ERGM.csv")
+> 
+> nucleos <- max(1, detectCores() - 1)
+> UMBRAL_TERGM <- 1e8 # 100 millones de USD sobre Exportaciones (X)
+> anios_panel <- 2004:2024
+> 
+> reporteros <- baseERGM %>%
++   group_by(iso3_o) %>%
++   summarise(n = n_distinct(year)) %>%
++   filter(n == 21) %>%
++   pull(iso3_o) %>%
++   sort()
+> 
+> n_rep <- length(reporteros)
+> 
+> # La base ya viene balanceada e imputada desde Python (71.862 filas exactas)
+> base_panel <- baseERGM %>%
++   arrange(year, iso3_o, iso3_d) %>%
++   mutate(
++     X = replace_na(X, 0),
++     M = replace_na(M, 0),
++     peso_comercio_total = replace_na(peso_comercio_total, 0),
++     CDT_vigente = replace_na(CDT_vigente, 0),
++     fta_wto = replace_na(fta_wto, 0),
++     comlang_off = replace_na(comlang_off, 0),
++     lazo_binario = ifelse(X > UMBRAL_TERGM, 1, 0)
++   )
+> 
+> # Función para asegurar alineación exacta de filas y columnas por indexación
+> hacer_matriz <- function(df, var, nodos = reporteros) {
++   mat <- matrix(0, length(nodos), length(nodos), dimnames = list(nodos, nodos))
++   mat[cbind(match(df$iso3_o, nodos), match(df$iso3_d, nodos))] <- df[[var]]
++   diag(mat) <- 0
++   stopifnot(!anyNA(mat))
++   return(mat)
++ }
+> 
+> lista_redes <- list()
+> cov_CDT <- list()
+> cov_fta <- list()
+> cov_PIB <- list()
+> pa_in <- list()
+> pa_out <- list()
+> 
+> for (i in seq_along(anios_panel)) {
++   df_t <- base_panel %>% filter(year == anios_panel[i])
++   A <- hacer_matriz(df_t, "lazo_binario")
++   lista_redes[[i]] <- as.network(A, directed = TRUE)
++   
++   cov_CDT[[i]] <- hacer_matriz(df_t, "CDT_vigente")
++   cov_fta[[i]] <- hacer_matriz(df_t, "fta_wto")
++   cov_PIB[[i]] <- hacer_matriz(df_t, "ln_gdp_prod")
++   
++   idx_rezago <- max(i - 1, 1)
++   A_rezago <- hacer_matriz(base_panel %>% filter(year == anios_panel[idx_rezago]), "lazo_binario")
++   pa_in[[i]]  <- matrix(sqrt(colSums(A_rezago)), n_rep, n_rep, byrow = TRUE, dimnames = list(reporteros, reporteros))
++   pa_out[[i]] <- matrix(sqrt(rowSums(A_rezago)), n_rep, n_rep, byrow = FALSE, dimnames = list(reporteros, reporteros))
++ }
+> 
+> b24 <- base_panel %>% filter(year == 2024)
+> mat_dist <- hacer_matriz(b24, "ln_dist")
+> mat_lang <- hacer_matriz(b24, "comlang_off")
+> 
+> # ==============================================================================
+> # 2. PRUEBAS DE VERIFICACIÓN DE COHERENCIA METODOLÓGICA
+> # ==============================================================================
+> cat("\n--- Ejecutando Verificaciones de Coherencia ---\n")
+
+--- Ejecutando Verificaciones de Coherencia ---
+> stopifnot(length(reporteros) == 59)
+> stopifnot(nrow(base_panel) == 59 * 58 * 21) # 71.862 díadas dirigidas
+> 
+> cdt_check <- function(o, d, y) {
++   base_panel$CDT_vigente[base_panel$iso3_o == o & base_panel$iso3_d == d & base_panel$year == y]
++ }
+> stopifnot(cdt_check("COL", "FRA", 2022) == 0, cdt_check("COL", "FRA", 2023) == 1) # Vigencia, no firma
+> stopifnot(cdt_check("BRA", "DEU", 2005) == 1, cdt_check("BRA", "DEU", 2006) == 0) # Terminación aplicada
+> stopifnot(cdt_check("CAN", "CHN", 2016) == cdt_check("CAN", "CHN", 2017))         # Sin salto por MLI
+> 
+> # Simetría del tratado bilateral y alineación de matrices
+> stopifnot(all(cov_CDT[[21]] == t(cov_CDT[[21]])))
+> stopifnot(all(rownames(cov_PIB[[1]]) == colnames(cov_PIB[[1]])))
+> 
+> cat("Evolución de convenios activos entre los 59 países (2004-2024):\n")
+Evolución de convenios activos entre los 59 países (2004-2024):
+> print(setNames(sapply(cov_CDT, function(m) sum(m[upper.tri(m)])), anios_panel))
+2004 2005 2006 2007 2008 2009 2010 2011 2012 2013 2014 2015 2016 2017 2018 2019 2020 2021 2022 2023 
+ 270  276  282  285  289  292  298  304  308  313  321  329  334  340  345  350  355  357  364  367 
+2024 
+ 367 
+> 
+> cat("Densidad anual de la red dirigida de exportaciones (X > 100M USD):\n")
+Densidad anual de la red dirigida de exportaciones (X > 100M USD):
+> print(setNames(round(sapply(lista_redes, network.density), 3), anios_panel))
+ 2004  2005  2006  2007  2008  2009  2010  2011  2012  2013  2014  2015  2016  2017  2018  2019  2020 
+0.315 0.344 0.366 0.392 0.415 0.381 0.399 0.424 0.430 0.430 0.433 0.422 0.421 0.437 0.446 0.444 0.432 
+ 2021  2022  2023  2024 
+0.456 0.479 0.471 0.469 
+> 
+> A_21 <- as.matrix(lista_redes[[21]])
+> cat("Proporción de díadas asimétricas en 2024 (verifica red dirigida):",
++     round(mean(A_21[upper.tri(A_21)] != t(A_21)[upper.tri(A_21)]), 3), "\n")
+Proporción de díadas asimétricas en 2024 (verifica red dirigida): 0.187 
+> 
+> # ==============================================================================
+> # 3. OBJETIVO 3: ESTIMACIÓN TERGM POR BLOQUES ANIDADOS (M1 -> M2 -> M3)
+> # ==============================================================================
+> cat("\n--- Estimando Bloques TERGM (2004-2023) ---\n")
+
+--- Estimando Bloques TERGM (2004-2023) ---
+> redes_train  <- lista_redes[1:20]
+> pa_in_train  <- pa_in[1:20]
+> pa_out_train <- pa_out[1:20]
+> cdt_train    <- cov_CDT[1:20]
+> fta_train    <- cov_fta[1:20]
+> pib_train    <- cov_PIB[1:20]
+> reps <- 500
+> 
+> set.seed(2026)
+> f_M1 <- redes_train ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
++   memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
++   edgecov(pa_in_train) + edgecov(pa_out_train)
+> fit_M1 <- btergm(f_M1, R = reps, parallel = "snow", ncpus = nucleos)
+
+Initial dimensions of the network and covariates:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> set.seed(2026)
+> f_M2 <- update(f_M1, ~ . + edgecov(fta_train) + edgecov(mat_dist) + edgecov(pib_train) + edgecov(mat_lang))
+> fit_M2 <- btergm(f_M2, R = reps, parallel = "snow", ncpus = nucleos)
+
+Initial dimensions of the network and covariates:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> set.seed(2026)
+> f_M3 <- update(f_M2, ~ . + edgecov(cdt_train))
+> fit_M3 <- btergm(f_M3, R = reps, parallel = "snow", ncpus = nucleos)
+
+Initial dimensions of the network and covariates:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+cdt_train (row)      59
+cdt_train (col)      59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+cdt_train (row)      59
+cdt_train (col)      59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> # Nombres unificados con la Ecuación 3 y la Tabla 1 de la tesis
+> nombres_coef <- c(
++   "edges"                        = "Edges (Densidad base)",
++   "mutual"                       = "Mutual (Reciprocidad)",
++   "gwesp.fixed.0.69"             = "GWESP (0,69)",
++   "ctriple"                      = "CTriple (Ciclicidad)",
++   "edgecov.memory[[i]]"          = "Memory (Estabilidad t-1)",
++   "edgecov.delrecip[[i]]"        = "DelRecip (Reciprocidad t-1)",
++   "edgecov.pa_in_train[[i]]"     = "Popularidad (PA_in)",
++   "edgecov.pa_out_train[[i]]"    = "Actividad (PA_out)",
++   "edgecov.fta_train[[i]]"       = "TLC / OMC",
++   "edgecov.mat_dist"             = "ln(Distancia)",
++   "edgecov.pib_train[[i]]"       = "ln(PIB_i * PIB_j)",
++   "edgecov.mat_lang"             = "Idioma común",
++   "edgecov.cdt_train[[i]]"       = "CDT vigente"
++ )
+> 
+> texreg(
++   list(fit_M1, fit_M2, fit_M3),
++   custom.model.names = c("M1: Endógeno", "M2: +Gravedad", "M3: +CDT"),
++   custom.coef.map = as.list(nombres_coef),
++   file = "Salidas/tablas/resultados_TERGM_bloques.tex"
++ )
+The table was written to the file 'Salidas/tablas/resultados_TERGM_bloques.tex'.
+> 
+> # ==============================================================================
+> # 4. EVALUACIÓN FUERA DE MUESTRA EN 2024 (M1, M2 y M3 + Chequeo sin ARE/VNM)
+> # ==============================================================================
+> library(pROC)
+Registered S3 methods overwritten by 'pROC':
+  method    from  
+  print.roc btergm
+  plot.roc  btergm
+Type 'citation("pROC")' for a citation.
+
+Adjuntando el paquete: ‘pROC’
+
+The following objects are masked from ‘package:stats’:
+
+    cov, smooth, var
+> library(PRROC)
+Cargando paquete requerido: rlang
+
+Adjuntando el paquete: ‘rlang’
+
+The following objects are masked from ‘package:purrr’:
+
+    flatten, flatten_chr, flatten_dbl, flatten_int, flatten_lgl, flatten_raw, invoke,
+    splice
+
+Aviso:
+package ‘PRROC’ was built under R version 4.6.2 
+> 
+> # A. Construir matrices rezagadas manuales de 2023 (t=20) para predecir 2024 (t=21)
+> A23      <- as.matrix(lista_redes[[20]])
+> mem_24   <- ifelse(A23 == 1, 1, -1) # Memory (stability): 1 si había lazo, -1 si no había
+> delr_24  <- t(A23)                  # DelRecip: transpuesta de A23
+> diag(mem_24) <- 0; diag(delr_24) <- 0
+> 
+> net24   <- lista_redes[[21]]
+> pain_24 <- pa_in[[21]]
+> pout_24 <- pa_out[[21]]
+> fta_24  <- cov_fta[[21]]
+> pib_24  <- cov_PIB[[21]]
+> cdt_24  <- cov_CDT[[21]]
+> 
+> # Fórmulas equivalentes en ergm puro para 2024
+> f_ergm_M1 <- net24 ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
++   edgecov(mem_24) + edgecov(delr_24) + edgecov(pain_24) + edgecov(pout_24)
+> 
+> f_ergm_M2 <- update(f_ergm_M1, ~ . + edgecov(fta_24) + edgecov(mat_dist) +
++                       edgecov(pib_24) + edgecov(mat_lang))
+> 
+> f_ergm_M3 <- update(f_ergm_M2, ~ . + edgecov(cdt_24))
+> 
+> # B. Prueba diagnóstica de simulate() directo (para ver si ergm 4.12 simula sin error)
+> sim_test <- simulate(f_ergm_M1, nsim = 1, coef = unname(coef(fit_M1)))
+> print(sim_test)
+ Network attributes:
+  vertices = 59 
+  directed = TRUE 
+  hyper = FALSE 
+  loops = FALSE 
+  multiple = FALSE 
+  bipartite = FALSE 
+  total edges= 1674 
+    missing edges= 0 
+    non-missing edges= 1674 
+
+ Vertex attribute names: 
+    vertex.names 
+
+ Edge attribute names not shown 
+> 
+> # C. Cálculo exacto de AUC-ROC y AUC-PR fuera de muestra (2024) vía ergmMPLE
+> eval_mple_2024 <- function(formula_ergm, modelo_btergm, nombre, excluir_imputados = FALSE) {
++   mple <- ergmMPLE(formula_ergm, output = "matrix")
++   probs <- as.numeric(plogis(mple$predictor %*% unname(coef(modelo_btergm))))
++   y_obs <- mple$response
++   
++   roc_obj <- roc(y_obs, probs, direction = "<", quiet = TRUE)
++   pr_obj  <- pr.curve(scores.class0 = probs[y_obs == 1],
++                       scores.class1 = probs[y_obs == 0])
++   
++   tibble(
++     Modelo  = nombre,
++     AUC_ROC = round(as.numeric(auc(roc_obj)), 4),
++     AUC_PR  = round(pr_obj$auc.integral, 4)
++   )
++ }
+> 
+> tabla_auc_tergm <- bind_rows(
++   eval_mple_2024(f_ergm_M1, fit_M1, "M1: Endógeno"),
++   eval_mple_2024(f_ergm_M2, fit_M2, "M2: +Gravedad"),
++   eval_mple_2024(f_ergm_M3, fit_M3, "M3: +CDT")
++ )
+> cat("\n--- Desempeño Predictivo Fuera de Muestra en 2024 (vía MPLE) ---\n")
+
+--- Desempeño Predictivo Fuera de Muestra en 2024 (vía MPLE) ---
+> print(tabla_auc_tergm)
+# A tibble: 3 × 3
+  Modelo        AUC_ROC AUC_PR
+  <chr>           <dbl>  <dbl>
+1 M1: Endógeno    0.991  0.99 
+2 M2: +Gravedad   0.992  0.991
+3 M3: +CDT        0.992  0.991
+> write.csv(tabla_auc_tergm, "Salidas/tablas/desempeno_bloques_2024.csv", row.names = FALSE)
+> 
+> # D. Chequeo de sensibilidad excluyendo ARE y VNM en 2024 (sobre las 100 redes simuladas con ergm)
+> set.seed(2026)
+> sim_M3_100 <- simulate(f_ergm_M3, nsim = 100, coef = unname(coef(fit_M3)))
+> prob_mat_M3 <- Reduce("+", lapply(sim_M3_100, as.matrix)) / 100
+> 
+> A_2024_full <- as.matrix(net24)
+> diag(A_2024_full) <- NA; diag(prob_mat_M3) <- NA
+> auc_sim_full <- auc(roc(as.vector(A_2024_full), as.vector(prob_mat_M3), direction = "<", quiet = TRUE))
+> 
+> idx_limpio <- which(!(reporteros %in% c("ARE", "VNM")))
+> auc_sim_limpio <- auc(roc(as.vector(A_2024_full[idx_limpio, idx_limpio]),
++                           as.vector(prob_mat_M3[idx_limpio, idx_limpio]), direction = "<", quiet = TRUE))
+> 
+> cat("\nAUC-ROC 2024 por simulación (100 redes) - Completo:", round(as.numeric(auc_sim_full), 4),
++     "| Sin ARE y VNM:", round(as.numeric(auc_sim_limpio), 4), "\n")
+
+AUC-ROC 2024 por simulación (100 redes) - Completo: 0.9889 | Sin ARE y VNM: 0.9884 
+> 
+> # E. Gráfico de Bondad de Ajuste (GOF estructural de M3)
+> gof_M3_in <- btergm::gof(fit_M3, nsim = 100, statistics = c(ideg, odeg, esp, geodesic, rocpr))
+
+Starting GOF assessment on a single computing core....
+
+Initial dimensions of the network and covariates:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+cdt_train (row)      59
+cdt_train (col)      59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                   t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_in_train (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pa_out_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)      59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                   t=20
+redes_train (row)    59
+redes_train (col)    59
+memory (row)         59
+memory (col)         59
+delrecip (row)       59
+delrecip (col)       59
+pa_in_train (row)    59
+pa_in_train (col)    59
+pa_out_train (row)   59
+pa_out_train (col)   59
+fta_train (row)      59
+fta_train (col)      59
+mat_dist (row)       59
+mat_dist (col)       59
+pib_train (row)      59
+pib_train (col)      59
+mat_lang (row)       59
+mat_lang (col)       59
+cdt_train (row)      59
+cdt_train (col)      59
+
+No 'target' network(s) provided. Using networks on the left-hand side of the model formula as observed networks.
+
+Simulating 100 networks from the following formula:
+ redes_train[[1]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[1]]) + edgecov(delrecip[[1]]) + edgecov(pa_in_train[[1]]) + edgecov(pa_out_train[[1]]) + edgecov(fta_train[[1]]) + edgecov(mat_dist[[1]]) + edgecov(pib_train[[1]]) + edgecov(mat_lang[[1]]) + edgecov(cdt_train[[1]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[2]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[2]]) + edgecov(delrecip[[2]]) + edgecov(pa_in_train[[2]]) + edgecov(pa_out_train[[2]]) + edgecov(fta_train[[2]]) + edgecov(mat_dist[[2]]) + edgecov(pib_train[[2]]) + edgecov(mat_lang[[2]]) + edgecov(cdt_train[[2]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[3]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[3]]) + edgecov(delrecip[[3]]) + edgecov(pa_in_train[[3]]) + edgecov(pa_out_train[[3]]) + edgecov(fta_train[[3]]) + edgecov(mat_dist[[3]]) + edgecov(pib_train[[3]]) + edgecov(mat_lang[[3]]) + edgecov(cdt_train[[3]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[4]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[4]]) + edgecov(delrecip[[4]]) + edgecov(pa_in_train[[4]]) + edgecov(pa_out_train[[4]]) + edgecov(fta_train[[4]]) + edgecov(mat_dist[[4]]) + edgecov(pib_train[[4]]) + edgecov(mat_lang[[4]]) + edgecov(cdt_train[[4]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[5]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[5]]) + edgecov(delrecip[[5]]) + edgecov(pa_in_train[[5]]) + edgecov(pa_out_train[[5]]) + edgecov(fta_train[[5]]) + edgecov(mat_dist[[5]]) + edgecov(pib_train[[5]]) + edgecov(mat_lang[[5]]) + edgecov(cdt_train[[5]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[6]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[6]]) + edgecov(delrecip[[6]]) + edgecov(pa_in_train[[6]]) + edgecov(pa_out_train[[6]]) + edgecov(fta_train[[6]]) + edgecov(mat_dist[[6]]) + edgecov(pib_train[[6]]) + edgecov(mat_lang[[6]]) + edgecov(cdt_train[[6]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[7]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[7]]) + edgecov(delrecip[[7]]) + edgecov(pa_in_train[[7]]) + edgecov(pa_out_train[[7]]) + edgecov(fta_train[[7]]) + edgecov(mat_dist[[7]]) + edgecov(pib_train[[7]]) + edgecov(mat_lang[[7]]) + edgecov(cdt_train[[7]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[8]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[8]]) + edgecov(delrecip[[8]]) + edgecov(pa_in_train[[8]]) + edgecov(pa_out_train[[8]]) + edgecov(fta_train[[8]]) + edgecov(mat_dist[[8]]) + edgecov(pib_train[[8]]) + edgecov(mat_lang[[8]]) + edgecov(cdt_train[[8]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[9]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[9]]) + edgecov(delrecip[[9]]) + edgecov(pa_in_train[[9]]) + edgecov(pa_out_train[[9]]) + edgecov(fta_train[[9]]) + edgecov(mat_dist[[9]]) + edgecov(pib_train[[9]]) + edgecov(mat_lang[[9]]) + edgecov(cdt_train[[9]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[10]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[10]]) + edgecov(delrecip[[10]]) + edgecov(pa_in_train[[10]]) + edgecov(pa_out_train[[10]]) + edgecov(fta_train[[10]]) + edgecov(mat_dist[[10]]) + edgecov(pib_train[[10]]) + edgecov(mat_lang[[10]]) + edgecov(cdt_train[[10]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[11]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[11]]) + edgecov(delrecip[[11]]) + edgecov(pa_in_train[[11]]) + edgecov(pa_out_train[[11]]) + edgecov(fta_train[[11]]) + edgecov(mat_dist[[11]]) + edgecov(pib_train[[11]]) + edgecov(mat_lang[[11]]) + edgecov(cdt_train[[11]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[12]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[12]]) + edgecov(delrecip[[12]]) + edgecov(pa_in_train[[12]]) + edgecov(pa_out_train[[12]]) + edgecov(fta_train[[12]]) + edgecov(mat_dist[[12]]) + edgecov(pib_train[[12]]) + edgecov(mat_lang[[12]]) + edgecov(cdt_train[[12]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[13]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[13]]) + edgecov(delrecip[[13]]) + edgecov(pa_in_train[[13]]) + edgecov(pa_out_train[[13]]) + edgecov(fta_train[[13]]) + edgecov(mat_dist[[13]]) + edgecov(pib_train[[13]]) + edgecov(mat_lang[[13]]) + edgecov(cdt_train[[13]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[14]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[14]]) + edgecov(delrecip[[14]]) + edgecov(pa_in_train[[14]]) + edgecov(pa_out_train[[14]]) + edgecov(fta_train[[14]]) + edgecov(mat_dist[[14]]) + edgecov(pib_train[[14]]) + edgecov(mat_lang[[14]]) + edgecov(cdt_train[[14]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[15]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[15]]) + edgecov(delrecip[[15]]) + edgecov(pa_in_train[[15]]) + edgecov(pa_out_train[[15]]) + edgecov(fta_train[[15]]) + edgecov(mat_dist[[15]]) + edgecov(pib_train[[15]]) + edgecov(mat_lang[[15]]) + edgecov(cdt_train[[15]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[16]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[16]]) + edgecov(delrecip[[16]]) + edgecov(pa_in_train[[16]]) + edgecov(pa_out_train[[16]]) + edgecov(fta_train[[16]]) + edgecov(mat_dist[[16]]) + edgecov(pib_train[[16]]) + edgecov(mat_lang[[16]]) + edgecov(cdt_train[[16]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[17]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[17]]) + edgecov(delrecip[[17]]) + edgecov(pa_in_train[[17]]) + edgecov(pa_out_train[[17]]) + edgecov(fta_train[[17]]) + edgecov(mat_dist[[17]]) + edgecov(pib_train[[17]]) + edgecov(mat_lang[[17]]) + edgecov(cdt_train[[17]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[18]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[18]]) + edgecov(delrecip[[18]]) + edgecov(pa_in_train[[18]]) + edgecov(pa_out_train[[18]]) + edgecov(fta_train[[18]]) + edgecov(mat_dist[[18]]) + edgecov(pib_train[[18]]) + edgecov(mat_lang[[18]]) + edgecov(cdt_train[[18]]) 
+
+Simulating 100 networks from the following formula:        
+ redes_train[[19]] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple + edgecov(memory[[19]]) + edgecov(delrecip[[19]]) + edgecov(pa_in_train[[19]]) + edgecov(pa_out_train[[19]]) + edgecov(fta_train[[19]]) + edgecov(mat_dist[[19]]) + edgecov(pib_train[[19]]) + edgecov(mat_lang[[19]]) + edgecov(cdt_train[[19]]) 
+
+19 networks from which simulations are drawn were provided.
+
+Processing statistic: Indegree
+Processing statistic: Outdegree
+Processing statistic: Edge-wise shared partners
+Processing statistic: Geodesic distances
+Processing statistic: Tie prediction
+> png("Salidas/figuras/gof_M3_prediccion2024.png", width = 2400, height = 1800, res = 300)
+> plot(gof_M3_in)
+> dev.off()
+null device 
+          1 
+> # ==============================================================================
+> # 5. ROBUSTEZ I: VENTANAS TEMPORALES (2015-2023 y 2019-2023)
+> # ==============================================================================
+> cat("\n--- Ejecutando Robustez I: Ventanas Temporales ---\n")
+
+--- Ejecutando Robustez I: Ventanas Temporales ---
+> 
+> correr_ventana <- function(idx) {
++   r_v    <- lista_redes[idx]
++   pain_v <- pa_in[idx]
++   pout_v <- pa_out[idx]
++   fta_v  <- cov_fta[idx]
++   pib_v  <- cov_PIB[idx]
++   cdt_v  <- cov_CDT[idx]
++   
++   f_v <- r_v ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
++     memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
++     edgecov(pain_v) + edgecov(pout_v) + edgecov(fta_v) +
++     edgecov(mat_dist) + edgecov(pib_v) + edgecov(mat_lang) + edgecov(cdt_v)
++   
++   set.seed(2026)
++   btergm(f_v, R = reps, parallel = "snow", ncpus = nucleos)
++ }
+> 
+> fit_10a <- correr_ventana(12:20) # 2015-2023
+
+Initial dimensions of the network and covariates:
+               t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9
+r_v (row)       59  59  59  59  59  59  59  59
+r_v (col)       59  59  59  59  59  59  59  59
+memory (row)    59  59  59  59  59  59  59  59
+memory (col)    59  59  59  59  59  59  59  59
+delrecip (row)  59  59  59  59  59  59  59  59
+delrecip (col)  59  59  59  59  59  59  59  59
+pain_v (row)    59  59  59  59  59  59  59  59
+pain_v (col)    59  59  59  59  59  59  59  59
+pout_v (row)    59  59  59  59  59  59  59  59
+pout_v (col)    59  59  59  59  59  59  59  59
+fta_v (row)     59  59  59  59  59  59  59  59
+fta_v (col)     59  59  59  59  59  59  59  59
+mat_dist (row)  59  59  59  59  59  59  59  59
+mat_dist (col)  59  59  59  59  59  59  59  59
+pib_v (row)     59  59  59  59  59  59  59  59
+pib_v (col)     59  59  59  59  59  59  59  59
+mat_lang (row)  59  59  59  59  59  59  59  59
+mat_lang (col)  59  59  59  59  59  59  59  59
+cdt_v (row)     59  59  59  59  59  59  59  59
+cdt_v (col)     59  59  59  59  59  59  59  59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+               t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9
+r_v (row)       59  59  59  59  59  59  59  59
+r_v (col)       59  59  59  59  59  59  59  59
+memory (row)    59  59  59  59  59  59  59  59
+memory (col)    59  59  59  59  59  59  59  59
+delrecip (row)  59  59  59  59  59  59  59  59
+delrecip (col)  59  59  59  59  59  59  59  59
+pain_v (row)    59  59  59  59  59  59  59  59
+pain_v (col)    59  59  59  59  59  59  59  59
+pout_v (row)    59  59  59  59  59  59  59  59
+pout_v (col)    59  59  59  59  59  59  59  59
+fta_v (row)     59  59  59  59  59  59  59  59
+fta_v (col)     59  59  59  59  59  59  59  59
+mat_dist (row)  59  59  59  59  59  59  59  59
+mat_dist (col)  59  59  59  59  59  59  59  59
+pib_v (row)     59  59  59  59  59  59  59  59
+pib_v (col)     59  59  59  59  59  59  59  59
+mat_lang (row)  59  59  59  59  59  59  59  59
+mat_lang (col)  59  59  59  59  59  59  59  59
+cdt_v (row)     59  59  59  59  59  59  59  59
+cdt_v (col)     59  59  59  59  59  59  59  59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> fit_5a  <- correr_ventana(16:20) # 2019-2023
+
+Initial dimensions of the network and covariates:
+               t=2 t=3 t=4 t=5
+r_v (row)       59  59  59  59
+r_v (col)       59  59  59  59
+memory (row)    59  59  59  59
+memory (col)    59  59  59  59
+delrecip (row)  59  59  59  59
+delrecip (col)  59  59  59  59
+pain_v (row)    59  59  59  59
+pain_v (col)    59  59  59  59
+pout_v (row)    59  59  59  59
+pout_v (col)    59  59  59  59
+fta_v (row)     59  59  59  59
+fta_v (col)     59  59  59  59
+mat_dist (row)  59  59  59  59
+mat_dist (col)  59  59  59  59
+pib_v (row)     59  59  59  59
+pib_v (col)     59  59  59  59
+mat_lang (row)  59  59  59  59
+mat_lang (col)  59  59  59  59
+cdt_v (row)     59  59  59  59
+cdt_v (col)     59  59  59  59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+               t=2 t=3 t=4 t=5
+r_v (row)       59  59  59  59
+r_v (col)       59  59  59  59
+memory (row)    59  59  59  59
+memory (col)    59  59  59  59
+delrecip (row)  59  59  59  59
+delrecip (col)  59  59  59  59
+pain_v (row)    59  59  59  59
+pain_v (col)    59  59  59  59
+pout_v (row)    59  59  59  59
+pout_v (col)    59  59  59  59
+fta_v (row)     59  59  59  59
+fta_v (col)     59  59  59  59
+mat_dist (row)  59  59  59  59
+mat_dist (col)  59  59  59  59
+pib_v (row)     59  59  59  59
+pib_v (col)     59  59  59  59
+mat_lang (row)  59  59  59  59
+mat_lang (col)  59  59  59  59
+cdt_v (row)     59  59  59  59
+cdt_v (col)     59  59  59  59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> texreg(
++   list(fit_M3, fit_10a, fit_5a),
++   custom.model.names = c("2004-2023 (Base)", "2015-2023", "2019-2023"),
++   file = "Salidas/tablas/robustez_ventanas.tex"
++ )
+The table was written to the file 'Salidas/tablas/robustez_ventanas.tex'.
+> 
+> # ==============================================================================
+> # 6. ROBUSTEZ II: UMBRALES DE BINARIZACIÓN (50M y 500M sobre Exportaciones X)
+> # ==============================================================================
+> cat("\n--- Ejecutando Robustez II: Umbrales de Binarización ---\n")
+
+--- Ejecutando Robustez II: Umbrales de Binarización ---
+> 
+> correr_umbral <- function(umbral, R_sim = reps) {
++   redes_u <- list(); pa_in_u <- list(); pa_out_u <- list()
++   for (i in seq_along(anios_panel)) {
++     df_t <- base_panel %>%
++       filter(year == anios_panel[i]) %>%
++       mutate(lazo = ifelse(X > umbral, 1, 0))
++     redes_u[[i]] <- as.network(hacer_matriz(df_t, "lazo"), directed = TRUE)
++     
++     idx_rezago <- max(i - 1, 1)
++     df_rez <- base_panel %>%
++       filter(year == anios_panel[idx_rezago]) %>%
++       mutate(lazo = ifelse(X > umbral, 1, 0))
++     A_rez <- hacer_matriz(df_rez, "lazo")
++     pa_in_u[[i]]  <- matrix(sqrt(colSums(A_rez)), n_rep, n_rep, byrow = TRUE, dimnames = list(reporteros, reporteros))
++     pa_out_u[[i]] <- matrix(sqrt(rowSums(A_rez)), n_rep, n_rep, byrow = FALSE, dimnames = list(reporteros, reporteros))
++   }
++   
++   r_u    <- redes_u[1:20]
++   pain_u <- pa_in_u[1:20]
++   pout_u <- pa_out_u[1:20]
++   
++   f_u <- r_u ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
++     memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
++     edgecov(pain_u) + edgecov(pout_u) + edgecov(fta_train) +
++     edgecov(mat_dist) + edgecov(pib_train) + edgecov(mat_lang) + edgecov(cdt_train)
++   
++   set.seed(2026)
++   return(btergm(f_u, R = R_sim, parallel = "snow", ncpus = nucleos))
++ }
+> 
+> fit_50M  <- correr_umbral(5e7)
+
+Initial dimensions of the network and covariates:
+                t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19 t=20
+r_u (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+r_u (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19 t=20
+r_u (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+r_u (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> fit_500M <- correr_umbral(5e8)
+
+Initial dimensions of the network and covariates:
+                t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19 t=20
+r_u (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+r_u (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19 t=20
+r_u (row)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+r_u (col)        59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+memory (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pain_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pout_u (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)   59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59   59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> texreg(
++   list(fit_50M, fit_M3, fit_500M),
++   custom.model.names = c("Umbral 50M", "Umbral 100M (Base)", "Umbral 500M"),
++   file = "Salidas/tablas/robustez_umbrales.tex"
++ )
+The table was written to the file 'Salidas/tablas/robustez_umbrales.tex'.
+> 
+> # ==============================================================================
+> # 7. ROBUSTEZ III: ESPECIFICACIÓN ALTERNATIVA DE GRADO (GWIDEGREE / GWODEGREE)
+> # ==============================================================================
+> cat("\n--- Ejecutando Robustez III: gwidegree y gwodegree ---\n")
+
+--- Ejecutando Robustez III: gwidegree y gwodegree ---
+> set.seed(2026)
+> f_M3_gwdeg <- redes_train ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
++   gwidegree(0.5, fixed = TRUE) + gwodegree(0.5, fixed = TRUE) +
++   memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
++   edgecov(fta_train) + edgecov(mat_dist) + edgecov(pib_train) + edgecov(mat_lang) + edgecov(cdt_train)
+> 
+> fit_M3_gwdeg <- btergm(f_M3_gwdeg, R = reps, parallel = "snow", ncpus = nucleos)
+
+Initial dimensions of the network and covariates:
+                  t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)       59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)       59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                  t=20
+redes_train (row)   59
+redes_train (col)   59
+memory (row)        59
+memory (col)        59
+delrecip (row)      59
+delrecip (col)      59
+fta_train (row)     59
+fta_train (col)     59
+mat_dist (row)      59
+mat_dist (col)      59
+pib_train (row)     59
+pib_train (col)     59
+mat_lang (row)      59
+mat_lang (col)      59
+cdt_train (row)     59
+cdt_train (col)     59
+
+All networks are conformable.
+
+Dimensions of the network and covariates after adjustment:
+                  t=2 t=3 t=4 t=5 t=6 t=7 t=8 t=9 t=10 t=11 t=12 t=13 t=14 t=15 t=16 t=17 t=18 t=19
+redes_train (row)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+redes_train (col)  59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (row)       59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+memory (col)       59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+delrecip (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+fta_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_dist (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+pib_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (row)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+mat_lang (col)     59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (row)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+cdt_train (col)    59  59  59  59  59  59  59  59   59   59   59   59   59   59   59   59   59   59
+                  t=20
+redes_train (row)   59
+redes_train (col)   59
+memory (row)        59
+memory (col)        59
+delrecip (row)      59
+delrecip (col)      59
+fta_train (row)     59
+fta_train (col)     59
+mat_dist (row)      59
+mat_dist (col)      59
+pib_train (row)     59
+pib_train (col)     59
+mat_lang (row)      59
+mat_lang (col)      59
+cdt_train (row)     59
+cdt_train (col)     59
+
+Starting pseudolikelihood estimation with 500 bootstrapping replications using parallel processing on 15 cores...
+Done.
+> 
+> texreg(
++   list(fit_M3, fit_M3_gwdeg),
++   custom.model.names = c("M3: Apego Preferencial (PA)", "M3: GW-Degree (0,5)"),
++   file = "Salidas/tablas/robustez_grados.tex"
++ )
+The table was written to the file 'Salidas/tablas/robustez_grados.tex'.
+> 
+> # ==============================================================================
+> # 8. OBJETIVO 4: MODELO DE FORMACIÓN DE CDT (Logit Penalizado de Firth)
+> # ==============================================================================
+> library(logistf)
+Registered S3 methods overwritten by 'lme4':
+  method               from
+  simulate.formula     ergm
+  simulate.formula_lhs ergm
+> library(pROC)
+> library(PRROC)
+> 
+> cat("\n--- Preparando Panel No Dirigido en Riesgo para Formación de CDT ---\n")
+
+--- Preparando Panel No Dirigido en Riesgo para Formación de CDT ---
+> 
+> # Calcular grado en la red de convenios para controlar estructura previa de tratados
+> grados_cdt <- map_dfr(seq_along(anios_panel), function(i) {
++   tibble(year = anios_panel[i], iso = reporteros, deg_cdt = rowSums(cov_CDT[[i]]))
++ })
+> 
+> panel_cdt <- base_panel %>%
++   mutate(a = pmin(iso3_o, iso3_d), b = pmax(iso3_o, iso3_d)) %>%
++   group_by(year, a, b) %>%
++   summarise(
++     CDT         = max(CDT_vigente),
++     comercio    = log1p(sum(X)),          # Flujo bilateral sumado X_ab + X_ba
++     lazo_activo = max(lazo_binario),      # Al menos un enlace comercial > 100M USD
++     fta_wto     = max(fta_wto),
++     ln_dist     = first(ln_dist),
++     comlang_off = first(comlang_off),
++     ln_gdp_prod = first(ln_gdp_prod),
++     .groups     = "drop"
++   ) %>%
++   left_join(grados_cdt, by = c("year", "a" = "iso")) %>%
++   left_join(grados_cdt, by = c("year", "b" = "iso"), suffix = c("_a", "_b")) %>%
++   mutate(deg_cdt_sum = deg_cdt_a + deg_cdt_b) %>%
++   arrange(a, b, year) %>%
++   group_by(a, b) %>%
++   mutate(
++     CDT_nuevo   = ifelse(lag(CDT) == 0 & CDT == 1, 1, 0),
++     CDT_t1      = lag(CDT),
++     comercio_t1 = lag(comercio),
++     lazo_t1     = lag(lazo_activo),
++     pib_t1      = lag(ln_gdp_prod),
++     fta_t1      = lag(fta_wto),
++     deg_cdt_t1  = lag(deg_cdt_sum)
++   ) %>%
++   ungroup() %>%
++   filter(CDT_t1 == 0) %>% # Díadas en riesgo de formar un nuevo tratado (sin excluir 2017)
++   drop_na(CDT_nuevo, comercio_t1, pib_t1)
+> 
+> train_cdt <- panel_cdt %>% filter(year <= 2018)
+> test_cdt  <- panel_cdt %>% filter(year >= 2019)
+> 
+> cat("\nEventos de entrada en vigor (CDT_nuevo == 1) en Train (2005-2018) y Test (2019-2024):\n")
+
+Eventos de entrada en vigor (CDT_nuevo == 1) en Train (2005-2018) y Test (2019-2024):
+> print(table(Train = train_cdt$CDT_nuevo))
+Train
+    0     1 
+19635    78 
+> print(table(Test  = test_cdt$CDT_nuevo))
+Test
+   0    1 
+8106   22 
+> 
+> # A. Modelo 1 (Referencia Gravitacional pura)
+> logit_grav <- logistf(
++   CDT_nuevo ~ pib_t1 + ln_dist + comlang_off + fta_t1,
++   data = train_cdt, flic = TRUE
++ )
+> 
+> # B. Modelo 2 (Gravedad + Volumen Comercial Rezagado)
+> logit_comercio <- logistf(
++   CDT_nuevo ~ comercio_t1 + pib_t1 + ln_dist + comlang_off + fta_t1,
++   data = train_cdt, flic = TRUE
++ )
+> 
+> # C. Modelo 3 (Gravedad + Comercio + Actividad en Red de CDT previa)
+> logit_completo <- logistf(
++   CDT_nuevo ~ comercio_t1 + lazo_t1 + deg_cdt_t1 + pib_t1 + ln_dist + comlang_off + fta_t1,
++   data = train_cdt, flic = TRUE
++ )
+> 
+> cat("\n--- RESULTADO FIRTH: Modelo Gravedad + Comercio ---\n")
+
+--- RESULTADO FIRTH: Modelo Gravedad + Comercio ---
+> summary(logit_comercio)
+logistf(formula = CDT_nuevo ~ comercio_t1 + pib_t1 + ln_dist + 
+    comlang_off + fta_t1, data = train_cdt, flic = TRUE)
+
+Model fitted by Penalized ML
+Coefficients:
+                  coef   se(coef)   lower 0.95   upper 0.95     Chisq            p method
+(Intercept) -7.7097292 3.52028000 -14.60947805 -0.809980452  4.888716 2.703278e-02      1
+comercio_t1  0.2088620 0.06236235   0.08924665  0.335340289 12.898035 3.289272e-04      2
+pib_t1      -0.1681866 0.08857241  -0.34189264  0.007629241  3.515328 6.080360e-02      2
+ln_dist      0.7998069 0.18121699   0.44886909  1.162248679 20.384149 6.335236e-06      2
+comlang_off  0.7846616 0.31579272   0.12350228  1.365097446  5.266006 2.174585e-02      2
+fta_t1       0.4643119 0.28970015  -0.12343332  1.011186573  2.438195 1.184124e-01      2
+
+Method: 1-Wald, 2-Profile penalized log-likelihood, 3-None
+
+Likelihood ratio test=36.51971 on 5 df, p=7.475175e-07, n=19713
+Wald test = 2206.371 on 5 df, p = 0> cat("\n--- RESULTADO FIRTH: Modelo Completo ---\n")
+
+--- RESULTADO FIRTH: Modelo Completo ---
+> summary(logit_completo)
+logistf(formula = CDT_nuevo ~ comercio_t1 + lazo_t1 + deg_cdt_t1 + 
+    pib_t1 + ln_dist + comlang_off + fta_t1, data = train_cdt, 
+    flic = TRUE)
+
+Model fitted by Penalized ML
+Coefficients:
+                   coef    se(coef)  lower 0.95  upper 0.95     Chisq           p method
+(Intercept) -1.38978980 4.038766373 -9.30577189  6.52619229 0.1102938 0.739809915      1
+comercio_t1  0.17775526 0.076583055  0.03848281  0.34519624 6.8076046 0.009077045      2
+lazo_t1     -0.25535173 0.363978923 -0.98330226  0.45611637 0.4882617 0.484703754      2
+deg_cdt_t1   0.08138666 0.007257809  0.06738209  0.09571148       Inf 0.000000000      2
+pib_t1      -0.25242320 0.095504247 -0.43880629 -0.06171869 6.6971294 0.009656826      2
+ln_dist      0.43022523 0.185499461  0.06868349  0.79890357 5.4515929 0.019550493      2
+comlang_off  0.89557114 0.323692487  0.22097921  1.49340955 6.4725486 0.010955331      2
+fta_t1       0.84835803 0.325892865  0.18945731  1.46666726 6.2343820 0.012529331      2
+
+Method: 1-Wald, 2-Profile penalized log-likelihood, 3-None
+
+Likelihood ratio test=156.6052 on 7 df, p=0, n=19713
+Wald test = 1776.119 on 7 df, p = 0> 
+> # Evaluación fuera de muestra (2019-2024) con direction = "<", IC 95% y AUC-PR
+> evaluar_firth <- function(mod, nombre) {
++   preds <- predict(mod, newdata = test_cdt, type = "response")
++   roc_obj <- roc(test_cdt$CDT_nuevo, preds, direction = "<", quiet = TRUE)
++   ci_obj  <- ci.auc(roc_obj, quiet = TRUE)
++   pr_obj  <- pr.curve(scores.class0 = preds[test_cdt$CDT_nuevo == 1],
++                       scores.class1 = preds[test_cdt$CDT_nuevo == 0])
++   tibble(
++     Modelo     = nombre,
++     AUC_ROC    = round(as.numeric(auc(roc_obj)), 4),
++     IC95_Inf   = round(ci_obj[1], 4),
++     IC95_Sup   = round(ci_obj[3], 4),
++     AUC_PR     = round(pr_obj$auc.integral, 4)
++   )
++ }
+> 
+> tabla_eval_cdt <- bind_rows(
++   evaluar_firth(logit_grav,     "1. Solo Gravedad"),
++   evaluar_firth(logit_comercio, "2. Gravedad + Comercio (t-1)"),
++   evaluar_firth(logit_completo, "3. Gravedad + Comercio + Red CDT (t-1)")
++ )
+> 
+> cat("\n--- Desempeño Predictivo de Nuevos CDT (2019-2024) ---\n")
+
+--- Desempeño Predictivo de Nuevos CDT (2019-2024) ---
+> print(tabla_eval_cdt)
+# A tibble: 3 × 5
+  Modelo                                 AUC_ROC IC95_Inf IC95_Sup AUC_PR
+  <chr>                                    <dbl>    <dbl>    <dbl>  <dbl>
+1 1. Solo Gravedad                         0.649    0.536    0.763 0.0043
+2 2. Gravedad + Comercio (t-1)             0.713    0.625    0.800 0.0049
+3 3. Gravedad + Comercio + Red CDT (t-1)   0.794    0.699    0.889 0.0121
+> write.csv(tabla_eval_cdt, "Salidas/tablas/evaluacion_firth_cdt.csv", row.names = FALSE)
+> 
+> # Exportar candidatos para Colombia en 2024 (sin CDT vigente)
+> candidatos_col_2024 <- panel_cdt %>%
++   filter(year == 2024 & (a == "COL" | b == "COL")) %>%
++   mutate(
++     Socio = ifelse(a == "COL", b, a),
++     Prob_Firth = round(predict(logit_completo, newdata = ., type = "response"), 4)
++   ) %>%
++   arrange(desc(Prob_Firth)) %>%
++   select(Socio, Prob_Firth, comercio_t1, lazo_t1, fta_t1, deg_cdt_t1)
+> 
+> cat("\n--- Top 15 Candidatos a CDT con Colombia según Modelo Longitudinal ---\n")
+
+--- Top 15 Candidatos a CDT con Colombia según Modelo Longitudinal ---
+> print(head(candidatos_col_2024, 15))
+# A tibble: 15 × 6
+   Socio Prob_Firth comercio_t1 lazo_t1 fta_t1 deg_cdt_t1
+   <chr>      <dbl>       <dbl>   <dbl>  <dbl>      <dbl>
+ 1 CHN       0.0623        22.4       1      0         64
+ 2 VNM       0.0525        20.1       1      0         58
+ 3 THA       0.0431        17.9       0      0         54
+ 4 PHL       0.0245        16.4       0      0         50
+ 5 IDN       0.0207        16.7       0      0         54
+ 6 ARG       0.0152        20.5       1      0         35
+ 7 BRA       0.0144        21.7       1      0         47
+ 8 BEL       0.0101        20.9       1      1         26
+ 9 HUN       0.0099        18.3       0      1         24
+10 FIN       0.0093        18.1       0      1         25
+11 NLD       0.0089        21.4       1      1         25
+12 SWE       0.0087        18.5       0      1         26
+13 LVA       0.0081        16.6       0      1         20
+14 SVK       0.0081        17.5       0      1         22
+15 DNK       0.0076        17.6       0      1         25
+> write.csv(head(candidatos_col_2024, 15), "Salidas/tablas/ranking_candidatos_colombia_2024.csv", row.names = FALSE)

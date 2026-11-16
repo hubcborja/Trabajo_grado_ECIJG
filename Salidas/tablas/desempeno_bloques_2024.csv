@@ -1,0 +1,4 @@
+"Modelo","AUC_ROC","AUC_PR"
+"M1: Endógeno",0.9906,0.99
+"M2: +Gravedad",0.992,0.9908
+"M3: +CDT",0.992,0.9909

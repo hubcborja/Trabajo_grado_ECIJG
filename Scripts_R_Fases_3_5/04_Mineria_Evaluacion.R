@@ -1,23 +1,3 @@
-#Objetivo: Estimación de modelos, pruebas de robustez y ranking predictivo (Objetivos 3 y 4 del KDD).
-#Contenido:
-#     TERGM (Minería): Estimación por bloques anidados (Modelo 1 Base, Modelo 2 Preferencial, Modelo 3 Triádico) 
-#           usando el paquete btergm y el bootstrap temporal (500 réplicas).
-#     Robustez: Reestimación de los modelos cambiando las ventanas temporales (2015-2024, 2020-2024) y variando 
-#           el umbral de binarización (50M y 500M).
-#     Evaluación (GOF): Simulación de las 100 redes y generación de los gráficos de bondad de ajuste 
-#           (grados, socios compartidos, distancias geodésicas, curvas ROC y PR).
-#     Predicción e Inversión del Modelo: El script del modelo logit temporal para predecir la creación del CDT 
-#           (con rezagos $t-1$ y filtrando el riesgo, como corregimos recientemente).
-#     Salida (Output): El ranking final (Top 15) de países candidatos a negociar un tratado con Colombia, 
-#           listo para entregar a la DIAN.
-
-#install.packages("ergm")
-#install.packages("btergm")
-#install.packages("parallel")
-#install.packages("logistf")
-#install.packages("pROC")
-install.packages("PRROC")
-
 # ==============================================================================
 # 04_Mineria_Evaluacion.R
 # Objetivo: Estimación de TERGM por bloques anidados (M1, M2, M3), evaluación 
@@ -26,19 +6,25 @@ install.packages("PRROC")
 #           de formación de CDT (Logit penalizado de Firth).
 # ==============================================================================
 
+#install.packages("ergm")
+#install.packages("btergm")
+#install.packages("parallel")
+#install.packages("logistf")
+#install.packages("pROC")
+#install.packages("PRROC")
+
+
 library(tidyverse)
 library(network)
 library(ergm)
 library(btergm)
 library(texreg)
 library(parallel)
-library(logistf)
-library(pROC)
-library(PRROC)
+
 
 # Crear directorios de salida si no existen
-dir.create("outputs/tablas", recursive = TRUE, showWarnings = FALSE)
-dir.create("outputs/figuras", recursive = TRUE, showWarnings = FALSE)
+dir.create("Salidas/tablas", recursive = TRUE, showWarnings = FALSE)
+dir.create("Salidas/figuras", recursive = TRUE, showWarnings = FALSE)
 
 # ==============================================================================
 # 1. IMPORTACIÓN Y PREPARACIÓN DE MATRICES RELACIONALES (59 PAÍSES)
@@ -181,59 +167,88 @@ texreg(
   list(fit_M1, fit_M2, fit_M3),
   custom.model.names = c("M1: Endógeno", "M2: +Gravedad", "M3: +CDT"),
   custom.coef.map = as.list(nombres_coef),
-  file = "outputs/tablas/resultados_TERGM_bloques.tex"
+  file = "Salidas/tablas/resultados_TERGM_bloques.tex"
 )
 
 # ==============================================================================
 # 4. EVALUACIÓN FUERA DE MUESTRA EN 2024 (M1, M2 y M3 + Chequeo sin ARE/VNM)
 # ==============================================================================
-cat("\n--- Evaluando Capacidad Predictiva Fuera de Muestra (Red 2024) ---\n")
+library(pROC)
+library(PRROC)
 
-f_M1_test <- lista_redes[20:21] ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
-  memory(type = "stability", lag = 1) + delrecip(mutuality = FALSE, lag = 1) +
-  edgecov(pa_in[20:21]) + edgecov(pa_out[20:21])
+# A. Construir matrices rezagadas manuales de 2023 (t=20) para predecir 2024 (t=21)
+A23      <- as.matrix(lista_redes[[20]])
+mem_24   <- ifelse(A23 == 1, 1, -1) # Memory (stability): 1 si había lazo, -1 si no había
+delr_24  <- t(A23)                  # DelRecip: transpuesta de A23
+diag(mem_24) <- 0; diag(delr_24) <- 0
 
-f_M2_test <- update(f_M1_test, ~ . + edgecov(cov_fta[20:21]) + edgecov(mat_dist) +
-                      edgecov(cov_PIB[20:21]) + edgecov(mat_lang))
+net24   <- lista_redes[[21]]
+pain_24 <- pa_in[[21]]
+pout_24 <- pa_out[[21]]
+fta_24  <- cov_fta[[21]]
+pib_24  <- cov_PIB[[21]]
+cdt_24  <- cov_CDT[[21]]
 
-f_M3_test <- update(f_M2_test, ~ . + edgecov(cov_CDT[20:21]))
+# Fórmulas equivalentes en ergm puro para 2024
+f_ergm_M1 <- net24 ~ edges + mutual + gwesp(0.69, fixed = TRUE) + ctriple +
+  edgecov(mem_24) + edgecov(delr_24) + edgecov(pain_24) + edgecov(pout_24)
 
-set.seed(2026)
-gof_M1 <- gof(fit_M1, nsim = 100, target = lista_redes[[21]], formula = f_M1_test,
-              coef = coef(fit_M1), statistics = c(rocpr))
-set.seed(2026)
-gof_M2 <- gof(fit_M2, nsim = 100, target = lista_redes[[21]], formula = f_M2_test,
-              coef = coef(fit_M2), statistics = c(rocpr))
-set.seed(2026)
-gof_M3 <- gof(fit_M3, nsim = 100, target = lista_redes[[21]], formula = f_M3_test,
-              coef = coef(fit_M3), statistics = c(rocpr, ideg, odeg, esp, geodesic))
+f_ergm_M2 <- update(f_ergm_M1, ~ . + edgecov(fta_24) + edgecov(mat_dist) +
+                      edgecov(pib_24) + edgecov(mat_lang))
 
-png("outputs/figuras/gof_M3_prediccion2024.png", width = 2400, height = 1800, res = 300)
-plot(gof_M3)
-dev.off()
+f_ergm_M3 <- update(f_ergm_M2, ~ . + edgecov(cdt_24))
 
-# Comparación de AUC-ROC y AUC-PR entre bloques (M1 vs M2 vs M3)
-tabla_auc_tergm <- tibble(
-  Modelo  = c("M1: Endógeno", "M2: +Gravedad", "M3: +CDT"),
-  AUC_ROC = c(gof_M1$Tie.prediction$auc.roc, gof_M2$Tie.prediction$auc.roc, gof_M3$Tie.prediction$auc.roc),
-  AUC_PR  = c(gof_M1$Tie.prediction$auc.pr,  gof_M2$Tie.prediction$auc.pr,  gof_M3$Tie.prediction$auc.pr)
+# B. Prueba diagnóstica de simulate() directo (para ver si ergm 4.12 simula sin error)
+sim_test <- simulate(f_ergm_M1, nsim = 1, coef = unname(coef(fit_M1)))
+print(sim_test)
+
+# C. Cálculo exacto de AUC-ROC y AUC-PR fuera de muestra (2024) vía ergmMPLE
+eval_mple_2024 <- function(formula_ergm, modelo_btergm, nombre, excluir_imputados = FALSE) {
+  mple <- ergmMPLE(formula_ergm, output = "matrix")
+  probs <- as.numeric(plogis(mple$predictor %*% unname(coef(modelo_btergm))))
+  y_obs <- mple$response
+  
+  roc_obj <- roc(y_obs, probs, direction = "<", quiet = TRUE)
+  pr_obj  <- pr.curve(scores.class0 = probs[y_obs == 1],
+                      scores.class1 = probs[y_obs == 0])
+  
+  tibble(
+    Modelo  = nombre,
+    AUC_ROC = round(as.numeric(auc(roc_obj)), 4),
+    AUC_PR  = round(pr_obj$auc.integral, 4)
+  )
+}
+
+tabla_auc_tergm <- bind_rows(
+  eval_mple_2024(f_ergm_M1, fit_M1, "M1: Endógeno"),
+  eval_mple_2024(f_ergm_M2, fit_M2, "M2: +Gravedad"),
+  eval_mple_2024(f_ergm_M3, fit_M3, "M3: +CDT")
 )
-cat("\n--- Desempeño Predictivo Fuera de Muestra (2024) por Bloque ---\n")
+cat("\n--- Desempeño Predictivo Fuera de Muestra en 2024 (vía MPLE) ---\n")
 print(tabla_auc_tergm)
-write.csv(tabla_auc_tergm, "outputs/tablas/desempeno_bloques_2024.csv", row.names = FALSE)
+write.csv(tabla_auc_tergm, "Salidas/tablas/desempeno_bloques_2024.csv", row.names = FALSE)
 
-# Verificación de sensibilidad en 2024 excluyendo las díadas imputadas (ARE y VNM)
+# D. Chequeo de sensibilidad excluyendo ARE y VNM en 2024 (sobre las 100 redes simuladas con ergm)
 set.seed(2026)
-idx_limpio <- which(!(reporteros %in% c("ARE", "VNM")))
-A_2024_real <- as.matrix(lista_redes[[21]])[idx_limpio, idx_limpio]
-redes_sim_M3 <- simulate(fit_M3, nsim = 100, formula = f_M3_test, coef = coef(fit_M3))
-prob_mat_M3 <- Reduce("+", lapply(redes_sim_M3, as.matrix)) / 100
-prob_limpia <- prob_mat_M3[idx_limpio, idx_limpio]
-diag(A_2024_real) <- NA; diag(prob_limpia) <- NA
-auc_sin_imputados <- auc(roc(as.vector(A_2024_real), as.vector(prob_limpia), direction = "<", quiet = TRUE))
-cat("AUC-ROC M3 (2024) completo:", round(gof_M3$Tie.prediction$auc.roc, 4),
-    "| Excluyendo ARE y VNM:", round(as.numeric(auc_sin_imputados), 4), "\n")
+sim_M3_100 <- simulate(f_ergm_M3, nsim = 100, coef = unname(coef(fit_M3)))
+prob_mat_M3 <- Reduce("+", lapply(sim_M3_100, as.matrix)) / 100
 
+A_2024_full <- as.matrix(net24)
+diag(A_2024_full) <- NA; diag(prob_mat_M3) <- NA
+auc_sim_full <- auc(roc(as.vector(A_2024_full), as.vector(prob_mat_M3), direction = "<", quiet = TRUE))
+
+idx_limpio <- which(!(reporteros %in% c("ARE", "VNM")))
+auc_sim_limpio <- auc(roc(as.vector(A_2024_full[idx_limpio, idx_limpio]),
+                          as.vector(prob_mat_M3[idx_limpio, idx_limpio]), direction = "<", quiet = TRUE))
+
+cat("\nAUC-ROC 2024 por simulación (100 redes) - Completo:", round(as.numeric(auc_sim_full), 4),
+    "| Sin ARE y VNM:", round(as.numeric(auc_sim_limpio), 4), "\n")
+
+# E. Gráfico de Bondad de Ajuste (GOF estructural de M3)
+gof_M3_in <- btergm::gof(fit_M3, nsim = 100, statistics = c(ideg, odeg, esp, geodesic, rocpr))
+png("Salidas/figuras/gof_M3_prediccion2024.png", width = 2400, height = 1800, res = 300)
+plot(gof_M3_in)
+dev.off()
 # ==============================================================================
 # 5. ROBUSTEZ I: VENTANAS TEMPORALES (2015-2023 y 2019-2023)
 # ==============================================================================
@@ -262,7 +277,7 @@ fit_5a  <- correr_ventana(16:20) # 2019-2023
 texreg(
   list(fit_M3, fit_10a, fit_5a),
   custom.model.names = c("2004-2023 (Base)", "2015-2023", "2019-2023"),
-  file = "outputs/tablas/robustez_ventanas.tex"
+  file = "Salidas/tablas/robustez_ventanas.tex"
 )
 
 # ==============================================================================
@@ -306,7 +321,7 @@ fit_500M <- correr_umbral(5e8)
 texreg(
   list(fit_50M, fit_M3, fit_500M),
   custom.model.names = c("Umbral 50M", "Umbral 100M (Base)", "Umbral 500M"),
-  file = "outputs/tablas/robustez_umbrales.tex"
+  file = "Salidas/tablas/robustez_umbrales.tex"
 )
 
 # ==============================================================================
@@ -324,12 +339,14 @@ fit_M3_gwdeg <- btergm(f_M3_gwdeg, R = reps, parallel = "snow", ncpus = nucleos)
 texreg(
   list(fit_M3, fit_M3_gwdeg),
   custom.model.names = c("M3: Apego Preferencial (PA)", "M3: GW-Degree (0,5)"),
-  file = "outputs/tablas/robustez_grados.tex"
+  file = "Salidas/tablas/robustez_grados.tex"
 )
 
 # ==============================================================================
-# 8. OBJETIVO 4: MODELO DE FORMACIÓN DE CDT (Logit Penalizado de Firth)
+# MODELO DE FORMACIÓN DE CDT (Logit Penalizado de Firth)
 # ==============================================================================
+library(logistf)
+
 cat("\n--- Preparando Panel No Dirigido en Riesgo para Formación de CDT ---\n")
 
 # Calcular grado en la red de convenios para controlar estructura previa de tratados
@@ -422,7 +439,7 @@ tabla_eval_cdt <- bind_rows(
 
 cat("\n--- Desempeño Predictivo de Nuevos CDT (2019-2024) ---\n")
 print(tabla_eval_cdt)
-write.csv(tabla_eval_cdt, "outputs/tablas/evaluacion_firth_cdt.csv", row.names = FALSE)
+write.csv(tabla_eval_cdt, "Salidas/tablas/evaluacion_firth_cdt.csv", row.names = FALSE)
 
 # Exportar candidatos para Colombia en 2024 (sin CDT vigente)
 candidatos_col_2024 <- panel_cdt %>%
@@ -436,4 +453,4 @@ candidatos_col_2024 <- panel_cdt %>%
 
 cat("\n--- Top 15 Candidatos a CDT con Colombia según Modelo Longitudinal ---\n")
 print(head(candidatos_col_2024, 15))
-write.csv(head(candidatos_col_2024, 15), "outputs/tablas/ranking_candidatos_colombia_2024.csv", row.names = FALSE)
+write.csv(head(candidatos_col_2024, 15), "Salidas/tablas/ranking_candidatos_colombia_2024.csv", row.names = FALSE)

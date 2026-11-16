@@ -9,11 +9,16 @@
 #         (Nodos, Aristas, Densidad, Agrupamiento, Reciprocidad, Distancia Media).
 #     Salida (Output): Tablas descriptivas y la visualización de la evolución de la red (los grafos por bloques económicos).
 #install.packages("countrycode")
+#install.packages("ggraph")
 options(scipen = 999)
 library(tidyverse)
 library(igraph)
 library(graphlayouts)
 library(countrycode)
+
+# Crear directorios de salida si no existen
+dir.create("Salidas/tablas", recursive = TRUE, showWarnings = FALSE)
+dir.create("Salidas/figuras", recursive = TRUE, showWarnings = FALSE)
 
 #===========================================
 # Carga del CSV base completa 
@@ -147,7 +152,7 @@ tabla_topologica <- map_dfr(anios_panel, function(y) {
 
 cat("\n--- Tabla Topológica (Red Dirigida X > 100M USD) ---\n")
 print(as.data.frame(tabla_topologica))
-write.csv(tabla_topologica, "tabla_topologica_evolucion.csv", row.names = FALSE)
+write.csv(tabla_topologica, "Salidas/tablas/tabla_topologica_evolucion.csv", row.names = FALSE)
 
 # 6. Red Ego de Colombia (2024 - Top 15 Socios)
 df_redes_100M <- baseERGM %>% filter(year == 2024 & X > UMBRAL_TERGM)
@@ -185,7 +190,7 @@ angulos <- seq(0, 2 * pi, length.out = length(nodos_resto) + 1)[-(length(nodos_r
 l[nodos_resto, ] <- cbind(cos(angulos), sin(angulos))
 l[idx_col, ] <- c(0, 0)
 
-png("ego_network_colombia.png", width = 2000, height = 2000, res = 300)
+png("Salidas/figuras/ego_network_colombia.png", width = 2000, height = 2000, res = 300)
 plot(
   ego_col,
   layout = l,
@@ -199,7 +204,7 @@ dev.off()
 # ==============================================================================
 # 7. EVOLUCIÓN ESTRUCTURAL DE LA RED 
 # ==============================================================================
-install.packages("ggraph")
+
 library(ggraph) # o graphlayouts para layout_with_stress
 
 # A. Definición de la grilla de años y grupos económicos (59 países activos)
@@ -302,7 +307,7 @@ dibujar_panel <- function(anio) {
 }
 
 # F. Impresión de la Cuadrícula Gráfica
-png("figura_redes_comercio.png", width = 3000, height = 3200, res = 300)
+png("Salidas/figuras/figura_redes_comercio.png", width = 3000, height = 3200, res = 300)
 layout(matrix(c(1, 2, 3, 4, 5, 5), nrow = 3, byrow = TRUE), heights = c(5, 5, 0.7))
 par(mar = c(1, 1, 2.5, 1))
 for (a in anios_fig) dibujar_panel(a)
