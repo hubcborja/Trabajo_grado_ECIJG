@@ -154,53 +154,6 @@ cat("\n--- Tabla Topológica (Red Dirigida X > 100M USD) ---\n")
 print(as.data.frame(tabla_topologica))
 write.csv(tabla_topologica, "Salidas/tablas/tabla_topologica_evolucion.csv", row.names = FALSE)
 
-# 6. Red Ego de Colombia (2024 - Top 15 Socios)
-df_redes_100M <- baseERGM %>% filter(year == 2024 & X > UMBRAL_TERGM)
-
-# 1. Identificar exactamente los 15 socios principales sumando el flujo bilateral X con COL
-socios_top15 <- df_redes_100M %>%
-  filter(iso3_o == "COL" | iso3_d == "COL") %>%
-  mutate(socio = ifelse(iso3_o == "COL", iso3_d, iso3_o)) %>%
-  group_by(socio) %>%
-  summarise(flujo_max = max(X), .groups = "drop") %>%
-  arrange(desc(flujo_max)) %>%
-  slice(1:15) %>%
-  pull(socio)
-
-nodos_ego <- c("COL", socios_top15)
-
-# 2. Filtrar las aristas donde AMBOS nodos pertenezcan a la red ego (COL + Top 15)
-df_ego_col <- df_redes_100M %>%
-  filter(iso3_o %in% nodos_ego & iso3_d %in% nodos_ego)
-
-ego_col <- graph_from_data_frame(df_ego_col[, c("iso3_o", "iso3_d")], directed = TRUE, vertices = nodos_ego)
-
-# 3. Asignar colores sin usar ifelse() sobre secuencias de igraph (evita Invalid indexing)
-V(ego_col)$color <- ifelse(V(ego_col)$name == "COL", "tomato", "gray85")
-
-# Primero pintamos todas las aristas entre terceros (naranja tenue) y luego sobrescribimos las de COL (azul)
-E(ego_col)$color <- adjustcolor("orange", alpha.f = 0.25)
-E(ego_col)[.from("COL") | .to("COL")]$color <- "dodgerblue3"
-
-# 4. Layout circular con Colombia en el centro exacto (0, 0)
-l <- layout_in_circle(ego_col)
-idx_col <- which(V(ego_col)$name == "COL")
-nodos_resto <- setdiff(seq_len(vcount(ego_col)), idx_col)
-angulos <- seq(0, 2 * pi, length.out = length(nodos_resto) + 1)[-(length(nodos_resto) + 1)]
-l[nodos_resto, ] <- cbind(cos(angulos), sin(angulos))
-l[idx_col, ] <- c(0, 0)
-
-png("Salidas/figuras/ego_network_colombia.png", width = 2000, height = 2000, res = 300)
-plot(
-  ego_col,
-  layout = l,
-  vertex.size = ifelse(V(ego_col)$name == "COL", 20, 9),
-  vertex.label.color = "black",
-  vertex.label.cex = 0.85,
-  edge.arrow.size = 0.35,
-  main = "Red Ego de Exportaciones de Colombia (2024)"
-)
-dev.off()
 # ==============================================================================
 # 7. EVOLUCIÓN ESTRUCTURAL DE LA RED 
 # ==============================================================================

@@ -245,7 +245,7 @@ cat("\nAUC-ROC 2024 por simulación (100 redes) - Completo:", round(as.numeric(a
     "| Sin ARE y VNM:", round(as.numeric(auc_sim_limpio), 4), "\n")
 
 # E. Gráfico de Bondad de Ajuste (GOF estructural de M3)
-gof_M3_in <- btergm::gof(fit_M3, nsim = 100, statistics = c(ideg, odeg, esp, geodesic, rocpr))
+gof_M3_in <- btergm::gof(fit_M3, nsim = 100, statistics = c(esp, dsp,geodesic, ideg, odeg, triad.directed, rocpr))
 png("Salidas/figuras/gof_M3_prediccion2024.png", width = 2400, height = 1800, res = 300)
 plot(gof_M3_in)
 dev.off()
@@ -410,6 +410,8 @@ logit_completo <- logistf(
   data = train_cdt, flic = TRUE
 )
 
+cat("\n--- RESULTADO FIRTH: Modelo Gravedad  ---\n")
+summary(logit_grav)
 cat("\n--- RESULTADO FIRTH: Modelo Gravedad + Comercio ---\n")
 summary(logit_comercio)
 cat("\n--- RESULTADO FIRTH: Modelo Completo ---\n")
@@ -436,6 +438,9 @@ tabla_eval_cdt <- bind_rows(
   evaluar_firth(logit_comercio, "2. Gravedad + Comercio (t-1)"),
   evaluar_firth(logit_completo, "3. Gravedad + Comercio + Red CDT (t-1)")
 )
+
+roc.test(roc(test_cdt$CDT_nuevo, predict(logit_comercio, newdata = test_cdt, type = "response"), direction = "<", quiet = TRUE), 
+         roc(test_cdt$CDT_nuevo, predict(logit_completo, newdata = test_cdt, type = "response"), direction = "<", quiet = TRUE))
 
 cat("\n--- Desempeño Predictivo de Nuevos CDT (2019-2024) ---\n")
 print(tabla_eval_cdt)
